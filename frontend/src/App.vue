@@ -172,6 +172,7 @@ const globalState = reactive({ activeMatch: null, uiMode: 'REAL' });
 
 provide('globalState', globalState);
 provide('openSmartTicket', () => { ticketAberto.value = true; });
+provide('changeGlobalTab', mudarAba);
 
 // ESTADO DA UI
 const usuarioLogado = ref(null);
