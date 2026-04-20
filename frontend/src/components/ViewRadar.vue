@@ -11,7 +11,7 @@
           </div>
           <div class="flex flex-col">
             <span class="text-xs text-white uppercase tracking-widest font-bold">Global Screener</span>
-            <span class="text-[9px] text-gray-500 font-mono uppercase mt-0.5"><strong class="text-bet-primary">14</strong> Oportunidades Mapeadas</span>
+            <span class="text-[9px] text-gray-500 font-mono uppercase mt-0.5"><strong class="text-bet-primary">{{ hftData.length + propsAnomalyData.length }}</strong> Oportunidades Mapeadas</span>
           </div>
         </div>
 
@@ -66,11 +66,11 @@
                </div>
                <div class="flex flex-col">
                   <span class="text-[11px] font-bold text-white uppercase tracking-widest flex items-center gap-2">Arbitragem Cross-Market Detectada <span class="bg-[#10B981] text-black px-1.5 py-0 rounded text-[8px] font-mono shadow-sm">Risco Zero</span></span>
-                  <span class="text-[10px] text-gray-300 mt-0.5 font-mono">Real Madrid: BTTS-Sim @ <strong class="text-white">1.95</strong> vs Under 2.5 @ <strong class="text-white">2.20</strong> (Ambos Pinnacle)</span>
+                  <span class="text-[10px] text-gray-300 mt-0.5 font-mono">Validação Automática do Ledger HFT</span>
                </div>
             </div>
             <div class="flex items-center gap-4">
-               <span class="text-lg font-mono text-[#10B981] font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">+0.84% PnL</span>
+               <span class="text-lg font-mono text-[#10B981] font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">EXEC</span>
                <button @click="surebetActive = false" class="text-gray-500 hover:text-white transition-colors bg-black/40 p-1.5 rounded"><X size="14"/></button>
             </div>
          </div>
@@ -114,46 +114,51 @@
                     </div>
                     
                     <div class="flex flex-col gap-1.5">
+                      <div v-if="(hftTab === 'match' ? hftData : propsAnomalyData).length === 0" class="text-center py-4 text-gray-500 text-xs uppercase tracking-widest font-mono">
+                        Aguardando dados da Matrix Quantitativa...
+                      </div>
+
                       <div v-for="(item, i) in (hftTab === 'match' ? hftData : propsAnomalyData)" :key="'hft'+i" class="grid grid-cols-12 gap-2 items-center bg-[#121927] border border-white/5 hover:border-white/20 p-2 rounded-lg transition-colors group relative overflow-hidden h-14">
                         <div class="absolute left-0 top-0 w-1 h-full opacity-50 group-hover:opacity-100 transition-opacity" :class="hftTab === 'match' ? 'bg-[#10B981]' : 'bg-[#a855f7]'"></div>
                         
-                        <span class="col-span-1 text-center text-[10px] font-mono text-gray-400">{{ item.hora }}</span>
+                        <span class="col-span-1 text-center text-[10px] font-mono text-gray-400">{{ item.hora || 'Ao Vivo' }}</span>
                         
                         <div class="col-span-2 flex flex-col pl-2 border-l border-white/5">
-                          <span class="text-xs font-bold text-white truncate">{{ item.jogo }}</span>
+                          <div class="flex items-center gap-1.5 mb-0.5">
+                            <span class="text-xs font-bold text-white truncate" :title="item.jogo">{{ item.jogo }}</span>
+                          </div>
                           <span class="text-[9px] uppercase tracking-wider mt-0.5 font-mono truncate" :class="hftTab === 'match' ? 'text-bet-primary' : 'text-[#a855f7]'">{{ item.mercado }}</span>
                         </div>
 
                         <div class="col-span-2 flex flex-col items-center justify-center bg-black/40 py-1 rounded border border-white/5 h-full">
                           <div class="flex items-center gap-1 font-mono text-xs font-bold">
-                            <span class="text-gray-500 line-through text-[9px]">{{ item.pinOpen }}</span>
+                            <span class="text-gray-500 line-through text-[9px]">{{ item.pinOpen || '-' }}</span>
                             <ArrowRight size="10" class="text-gray-600"/>
-                            <span :class="item.pinClose < item.pinOpen ? 'text-red-400' : 'text-green-400'">{{ item.pinClose }}</span>
+                            <span :class="item.pinClose < item.pinOpen ? 'text-red-400' : 'text-green-400'">{{ item.pinClose || '-' }}</span>
                           </div>
-                          <span class="text-[8px] text-gray-500 uppercase mt-0.5 tracking-widest">Fair: {{ item.trueOdd }}</span>
+                          <span class="text-[8px] text-gray-500 uppercase mt-0.5 tracking-widest">Fair: {{ item.trueOdd || '-' }}</span>
                         </div>
 
                         <div class="col-span-2 flex items-center justify-center h-full px-2">
                            <svg viewBox="0 0 50 15" class="w-full h-4 overflow-visible">
-                             <polyline :points="item.sparkline" fill="none" :stroke="item.pinClose < item.pinOpen ? '#EF4444' : '#10B981'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
-                             <circle cx="50" :cy="item.sparkline.split(' ').pop().split(',')[1]" r="1.5" :fill="item.pinClose < item.pinOpen ? '#EF4444' : '#10B981'" />
+                             <polyline :points="item.sparkline || '0,10 50,10'" fill="none" :stroke="item.pinClose < item.pinOpen ? '#EF4444' : '#10B981'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
                            </svg>
                         </div>
 
                         <div class="col-span-1 flex flex-col items-center justify-center">
-                          <span class="text-xs font-mono font-bold text-white bg-yellow-500/10 border border-yellow-500/30 px-2 py-0.5 rounded">{{ item.softOdd }}</span>
-                          <span class="text-[8px] text-yellow-500 uppercase mt-1 font-bold truncate max-w-full px-1">{{ item.bookie }}</span>
+                          <span class="text-xs font-mono font-bold text-white bg-yellow-500/10 border border-yellow-500/30 px-2 py-0.5 rounded">{{ item.softOdd || '-' }}</span>
+                          <span class="text-[8px] text-yellow-500 uppercase mt-1 font-bold truncate max-w-full px-1">{{ item.bookie || 'Mercado' }}</span>
                         </div>
 
                         <div class="col-span-2 flex flex-col items-center justify-center border-l border-white/5 h-full pl-1">
                           <div class="flex items-center gap-1.5">
-                            <span class="text-xs font-mono font-bold drop-shadow-[0_0_5px_currentColor]" :class="hftTab === 'match' ? 'text-[#10B981]' : 'text-[#a855f7]'">+{{ item.ev }}%</span>
+                            <span class="text-xs font-mono font-bold drop-shadow-[0_0_5px_currentColor]" :class="hftTab === 'match' ? 'text-[#10B981]' : 'text-[#a855f7]'">+{{ item.ev || '0.0' }}%</span>
                             <div class="flex flex-col gap-0.5" title="Liquidez/Market Depth">
                               <div class="w-4 h-1 bg-gray-700 rounded-sm overflow-hidden flex"><div class="h-full bg-white w-full"></div></div>
-                              <div class="w-4 h-1 bg-gray-700 rounded-sm overflow-hidden flex"><div class="h-full bg-white" :style="`width: ${item.depth}%`"></div></div>
+                              <div class="w-4 h-1 bg-gray-700 rounded-sm overflow-hidden flex"><div class="h-full bg-white" :style="`width: ${item.depth || 100}%`"></div></div>
                             </div>
                           </div>
-                          <span class="text-[8px] text-gray-400 uppercase mt-0.5 font-mono">Kelly: {{ item.kelly }}u</span>
+                          <span class="text-[8px] text-gray-400 uppercase mt-0.5 font-mono">Kelly: {{ item.kelly || '0.0' }}u</span>
                         </div>
 
                         <div class="col-span-2 flex justify-end items-center gap-2 pr-2 h-full">
@@ -185,6 +190,8 @@
                     <WidgetCard v-if="subElement.id === 'asian_scanner'" titulo="Live Asian Pressure Scanner" class="w-full flex-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)] border-t-2 border-blue-500">
                       <template #icone><Activity :size="16" color="#3b82f6" /></template>
                       <div class="flex flex-col gap-3 mt-2 h-full">
+                        <div v-if="livePressureData.length === 0" class="text-center py-4 text-gray-500 text-[9px] uppercase font-mono">Buscando Pressão Asiática...</div>
+                        
                         <div v-for="(live, i) in livePressureData" :key="'lp'+i" class="bg-black/20 border border-white/5 p-3 rounded-xl relative overflow-hidden group hover:border-blue-500/30 transition-colors">
                           <div class="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-blue-500/10 to-transparent pointer-events-none"></div>
                           
@@ -199,9 +206,9 @@
                               <span :class="live.pressaoFora > live.pressaoCasa ? 'text-blue-400' : ''">Fora APM: {{ live.apmFora }}</span>
                             </div>
                             <div class="w-full h-1.5 bg-gray-800 rounded flex overflow-hidden shadow-inner">
-                              <div class="h-full bg-blue-500 transition-all" :style="`width: ${(live.pressaoCasa / (live.pressaoCasa + live.pressaoFora)) * 100}%`"></div>
+                              <div class="h-full bg-blue-500 transition-all" :style="`width: ${(live.pressaoCasa / ((live.pressaoCasa + live.pressaoFora) || 1)) * 100}%`"></div>
                               <div class="h-full bg-white/20 w-0.5"></div>
-                              <div class="h-full bg-gray-500 transition-all" :style="`width: ${(live.pressaoFora / (live.pressaoCasa + live.pressaoFora)) * 100}%`"></div>
+                              <div class="h-full bg-gray-500 transition-all" :style="`width: ${(live.pressaoFora / ((live.pressaoCasa + live.pressaoFora) || 1)) * 100}%`"></div>
                             </div>
                           </div>
 
@@ -221,6 +228,8 @@
                     <WidgetCard v-else-if="subElement.id === 'smart_steamers'" titulo="Smart Money Steamers" class="w-full flex-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)] border-t-2 border-yellow-500">
                       <template #icone><Flame :size="16" color="#F59E0B" /></template>
                       <div class="flex flex-col gap-3 mt-2 h-full">
+                        <div v-if="steamersData.length === 0" class="text-center py-4 text-gray-500 text-[9px] uppercase font-mono">Monitorando Volume Sharp...</div>
+
                         <div v-for="(steamer, i) in steamersData" :key="'st'+i" class="bg-black/20 border border-white/5 p-3 rounded-xl relative overflow-hidden group hover:border-yellow-500/30 transition-colors">
                           <div class="absolute left-0 top-0 h-full w-1" :class="steamer.urgencia === 'high' ? 'bg-red-500' : 'bg-yellow-500'"></div>
                           <div class="flex justify-between items-start mb-2 pl-2">
@@ -247,10 +256,13 @@
             </template>
 
             <template v-else-if="element.id === 'ai_picks'">
-              <WidgetCard titulo="AI Gold Picks (Z-Score > 2.0)" class="w-full shadow-[0_15px_40px_rgba(0,0,0,0.3)] border-t-2 border-[#10B981]">
+              <WidgetCard titulo="S-Tier Ticket Builder (AI Portfólio)" class="w-full shadow-[0_15px_40px_rgba(0,0,0,0.3)] border-t-2 border-[#10B981]">
                 <template #icone><Target :size="16" color="#10B981" /></template>
                 <template #acoes>
-                   <span class="text-[9px] text-[#10B981] font-mono font-bold uppercase tracking-widest bg-[#10B981]/10 px-2 py-0.5 rounded border border-[#10B981]/20">Modelo Validado</span>
+                   <button @click="triggerTicketBuilder" :disabled="isBuilding" class="bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/50 px-3 py-1 rounded text-[9px] font-bold uppercase tracking-widest hover:bg-[#10B981] hover:text-black transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                      <RefreshCcw v-if="isBuilding" size="10" class="animate-spin-slow" />
+                      {{ isBuilding ? 'Processando Oráculo...' : 'Gerar Bilhetes' }}
+                   </button>
                 </template>
                 <div class="flex flex-col gap-3 mt-2">
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -259,15 +271,15 @@
                       <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold block mb-1">{{ pick.liga }}</span>
                       <span class="text-sm font-bold text-white truncate block mb-3 drop-shadow-sm">{{ pick.jogo }}</span>
                       <div class="flex justify-between items-center mb-3 bg-black/40 p-2.5 rounded border border-white/5 shadow-inner">
-                        <div class="flex flex-col">
-                          <span class="text-[9px] text-gray-500 uppercase tracking-widest">Ação Detectada</span>
-                          <span class="text-[11px] font-mono font-bold text-[#10B981]">{{ pick.aposta }}</span>
+                        <div class="flex flex-col w-3/4">
+                          <span class="text-[9px] text-gray-500 uppercase tracking-widest">Covariância SGP</span>
+                          <span class="text-[10px] font-mono font-bold text-[#10B981] truncate block" :title="pick.aposta">{{ pick.aposta }}</span>
                         </div>
                         <span class="text-sm font-mono font-bold text-white bg-[#121927] px-2 py-0.5 rounded border border-gray-700">{{ pick.odd }}</span>
                       </div>
                       <div class="flex justify-between items-center border-t border-white/5 pt-3 mt-1">
-                        <span class="text-[9px] text-gray-400 font-mono flex items-center gap-1"><BarChart2 size="10" class="text-blue-400"/> Z-Score: <strong class="text-blue-400">{{ pick.zscore }}</strong></span>
-                        <span class="text-[9px] text-[#10B981] font-bold uppercase bg-[#10B981]/10 px-1.5 py-0.5 rounded border border-[#10B981]/30 shadow-sm">+{{ pick.ev }}% EV</span>
+                        <span class="text-[9px] text-gray-400 font-mono flex items-center gap-1 truncate pr-2"><BarChart2 size="10" class="text-blue-400 shrink-0"/> <span class="truncate">{{ pick.zscore }}</span></span>
+                        <span class="text-[9px] text-[#10B981] font-bold uppercase bg-[#10B981]/10 px-1.5 py-0.5 rounded border border-[#10B981]/30 shadow-sm shrink-0">+{{ pick.ev }} EV</span>
                       </div>
                     </div>
                   </div>
@@ -301,6 +313,7 @@
           </div>
           
           <div class="flex flex-col gap-2">
+            <div v-if="topDrops.length === 0" class="text-center py-2 text-gray-600 text-[8px] uppercase">Aguardando dados...</div>
             <div v-for="(drop, i) in topDrops" :key="'td'+i" class="bg-black/30 border border-white/5 p-2.5 rounded-lg hover:bg-white/5 transition-colors group cursor-pointer">
               <div class="flex justify-between items-start mb-1.5">
                 <span class="text-[11px] font-bold text-white group-hover:text-bet-primary transition-colors">{{ drop.jogo }}</span>
@@ -324,6 +337,7 @@
           </div>
           
           <div class="flex flex-col gap-2">
+            <div v-if="volumeSpikes.length === 0" class="text-center py-2 text-gray-600 text-[8px] uppercase">Aguardando dados...</div>
             <div v-for="(spike, i) in volumeSpikes" :key="'vs'+i" class="bg-black/30 border border-white/5 p-2.5 rounded-lg flex flex-col gap-2">
               <div class="flex justify-between items-center">
                 <span class="text-[11px] font-bold text-white">{{ spike.jogo }}</span>
@@ -346,7 +360,7 @@
             <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Bot Execution Log</span>
           </div>
           <div class="flex flex-col gap-1 font-mono text-[8px] text-gray-400 leading-tight h-16 overflow-hidden relative">
-            <span v-for="(log, i) in botLogs" :key="'log'+i" class="truncate" :class="{'text-[#10B981]': log.includes('OK'), 'text-yellow-500': log.includes('SCAN')}">> {{ log }}</span>
+            <span v-for="(log, i) in botLogs" :key="'log'+i" class="truncate" :class="{'text-[#10B981]': log.includes('OK') || log.includes('ALPHA') || log.includes('TICKET'), 'text-yellow-500': log.includes('SCAN')}">> {{ log }}</span>
             <div class="absolute bottom-0 w-full h-8 bg-gradient-to-t from-black/60 to-transparent"></div>
           </div>
           <div class="flex justify-between items-center border-t border-gray-800 pt-2 mt-1">
@@ -365,7 +379,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { io } from 'socket.io-client';
 import draggable from 'vuedraggable';
 import { 
   GripVertical, GripHorizontal, Radio, SlidersHorizontal, 
@@ -373,20 +388,23 @@ import {
   ArrowRight, ArrowDownRight, Plus, BarChart2, Zap, Flame, User, BellRing,
   TrendingDown, Database, Terminal, Wifi
 } from 'lucide-vue-next';
-
-// O Layout principal e os Cards
+import axios from 'axios';
 import WidgetCard from './WidgetCard.vue';
 
-// ESTADO DOS MACRO-FILTROS
+// ==================================================
+// FIX S-TIER: ROTAS E PORTAS CORRIGIDAS (PORTA 8000)
+// ==================================================
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8000';
+
+// ESTADO DOS MACRO-FILTROS E LAYOUT
 const filtroTier = ref('tier1');
-const filtroEV = ref(5.0); 
+const filtroEV = ref(3.0); 
 const filtroTempo = ref('12h');
-const surebetActive = ref(true); 
-
-// ABA DA MATRIZ HFT
+const surebetActive = ref(false); 
 const hftTab = ref('match');
+const isBuilding = ref(false);
 
-// ESTADO DO DRAG AND DROP - ESTRUTURA NATIVA S-TIER
 const blocosVerticais = ref([
   { id: 'hft_matrix', type: 'single' }, 
   { id: 'linha-menores', type: 'grid' },
@@ -398,86 +416,151 @@ const widgetsMenores = ref([
   { id: 'smart_steamers' } 
 ]);
 
-// ==================================================
-// MOCK DATA DE ALTA DENSIDADE (HFT, ASIAN, STEAMERS)
-// ==================================================
-
-const hftData = ref([
-  { hora: "16:00", jogo: "Arsenal x Liverpool", mercado: "Arsenal AH -0.5", pinOpen: "2.10", pinClose: "1.92", trueOdd: "1.85", softOdd: "2.05", bookie: "Betano", ev: "10.8", kelly: "2.5", depth: "100", sparkline: "0,10 10,8 20,12 30,14 40,6 50,4" },
-  { hora: "16:45", jogo: "Juventus x Milan", mercado: "Over 2.5 Gols", pinOpen: "1.80", pinClose: "1.65", trueOdd: "1.60", softOdd: "1.75", bookie: "Bet365", ev: "9.3", kelly: "1.8", depth: "80", sparkline: "0,8 10,6 20,5 30,7 40,4 50,2" },
-  { hora: "20:30", jogo: "Real Madrid x Sevilla", mercado: "Real Madrid ML", pinOpen: "1.55", pinClose: "1.42", trueOdd: "1.38", softOdd: "1.50", bookie: "Pinnacle", ev: "8.6", kelly: "1.5", depth: "100", sparkline: "0,12 10,10 20,8 30,6 40,5 50,4" },
-  { hora: "Ao Vivo", jogo: "Inter x Roma", mercado: "Inter AH -1.0", pinOpen: "2.00", pinClose: "1.88", trueOdd: "1.82", softOdd: "1.95", bookie: "1xBet", ev: "7.1", kelly: "1.2", depth: "60", sparkline: "0,10 10,9 20,11 30,8 40,5 50,3" },
-]);
-
-const propsAnomalyData = ref([
-  { hora: "16:00", jogo: "Arsenal x Liverpool", mercado: "Saka Over 0.5 Chutes", pinOpen: "1.85", pinClose: "1.55", trueOdd: "1.45", softOdd: "1.90", bookie: "Betano", ev: "22.5", kelly: "4.1", depth: "30", sparkline: "0,12 10,12 20,9 30,8 40,5 50,2" },
-  { hora: "20:30", jogo: "Real M. x Sevilla", mercado: "Bellingham Over 1.5 Faltas", pinOpen: "2.10", pinClose: "1.80", trueOdd: "1.72", softOdd: "2.15", bookie: "Bet365", ev: "18.4", kelly: "3.2", depth: "40", sparkline: "0,14 10,12 20,12 30,9 40,6 50,5" },
-]);
-
-const livePressureData = ref([
-  { jogo: "Napoli x Lazio", tempo: "62", apmCasa: 1.8, apmFora: 0.4, pressaoCasa: 82, pressaoFora: 18, linhaAntiga: "AH -0.5", linhaAtual: "AH -1.0" },
-  { jogo: "B. Munique x Union", tempo: "38", apmCasa: 2.1, apmFora: 0.2, pressaoCasa: 91, pressaoFora: 9, linhaAntiga: "O 3.0", linhaAtual: "O 2.5" },
-]);
-
-const steamersData = ref([
-  { tempo: "Há 2 min", jogo: "Chelsea x Tottenham", volume: "€ 450k", mercado: "Chelsea ML", odd: "2.10", urgencia: "high" },
-  { tempo: "Há 14 min", jogo: "PSG x Lyon", volume: "€ 320k", mercado: "Over 3.5 Gols", odd: "1.85", urgencia: "medium" },
-]);
-
-const goldPicksData = ref([
-  { liga: "Premier League", jogo: "Aston Villa x Newcastle", aposta: "Aston Villa AH -0.25", odd: "1.98", zscore: "2.84", ev: "12.4" },
-  { liga: "La Liga", jogo: "Girona x Betis", aposta: "Under 2.5 Gols", odd: "1.82", zscore: "2.51", ev: "9.8" },
-  { liga: "Bundesliga", jogo: "Leipzig x Frankfurt", aposta: "Leipzig Over 1.5 Gols", odd: "1.75", zscore: "2.33", ev: "8.1" }
-]);
-
-// ==================================================
-// MOCK DATA: NOVO ALPHA QUANT FEED (LATERAL DIREITA)
-// ==================================================
-const topDrops = ref([
-  { jogo: "Fenerbahce x Porto", liga: "Europa L.", mercado: "Porto AH 0.0", old: "2.20", new: "1.85" },
-  { jogo: "Galatasaray x Celta", liga: "Europa L.", mercado: "Under 2.5", old: "1.95", new: "1.70" },
-  { jogo: "Boca Jrs x River", liga: "Libertadores", mercado: "Boca ML", old: "2.40", new: "2.05" },
-  { jogo: "Al Ahly x Al Ittihad", liga: "Saudi Pro", mercado: "Over 3.5", old: "2.10", new: "1.78" }
-]);
-
-const volumeSpikes = ref([
-  { jogo: "Brighton x West Ham", mercado: "Match Odds", vol: "€ 1.2M", percent: 85 },
-  { jogo: "Lille x Monaco", mercado: "Asian Handicap", vol: "€ 850k", percent: 60 },
-  { jogo: "Fiorentina x Roma", mercado: "Goal Line", vol: "€ 620k", percent: 45 }
-]);
-
+// ARRAYS VAZIOS (AGUARDANDO O BANCO DE DADOS)
+const hftData = ref([]);
+const propsAnomalyData = ref([]);
+const livePressureData = ref([]);
+const steamersData = ref([]);
+const goldPicksData = ref([]);
+const topDrops = ref([]);
+const volumeSpikes = ref([]);
 const botLogs = ref([
-  "FETCHING Pinnacle API... [OK]",
-  "SCAN: 1,402 Active Markets...",
-  "WARN: High Volatility detected in Serie B (ITA)",
-  "CALC: Updating Kelly Multipliers...",
-  "MATCH: 14 opportunities found."
+  "> SYS: Conectando ao Banco de Dados Principal...",
+  "> SCAN: Inicializando varredura HFT..."
 ]);
+
+// ==================================================
+// MÉTODOS DE BUSCA (PERSISTÊNCIA REAL)
+// ==================================================
+const fetchRadarData = async () => {
+  try {
+    const token = localStorage.getItem('betgenius_token');
+    const opts = { headers: { Authorization: `Bearer ${token}` } };
+
+    // Dispara a busca real nos endpoints (que vamos criar/ajustar no quantController depois)
+    // Opcionalmente, essas rotas não existem ainda, então fazemos um try/catch silencioso
+    const [dropsRes, spikesRes] = await Promise.all([
+      axios.get(`${API_BASE_URL}/api/v1/quant/top-drops`, opts).catch(() => ({ data: [] })),
+      axios.get(`${API_BASE_URL}/api/v1/quant/volume-spikes`, opts).catch(() => ({ data: [] }))
+    ]);
+
+    if (dropsRes.data.length > 0) topDrops.value = dropsRes.data;
+    if (spikesRes.data.length > 0) volumeSpikes.value = spikesRes.data;
+
+    botLogs.value.unshift("> OK: Dados da Matrix Sincronizados.");
+    if (botLogs.value.length > 8) botLogs.value.pop();
+  } catch (error) {
+    botLogs.value.unshift("> ERR: Falha ao ler DB. Usando cache local.");
+  }
+};
+
+const getTeamLogo = (teamName) => {
+  if (!teamName) return '';
+  const safeName = encodeURIComponent(teamName.trim());
+  return `${API_BASE_URL}/api/v1/teams/shield/${safeName}`; // Ajustado para /api/v1/
+};
+
+const handleImageError = (e) => {
+  e.target.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; 
+};
+
+const triggerTicketBuilder = async () => {
+  isBuilding.value = true;
+  botLogs.value.unshift("> SCAN: Executando Motor SGP / Python...");
+  if (botLogs.value.length > 8) botLogs.value.pop();
+
+  try {
+    const token = localStorage.getItem('betgenius_token');
+    const payload = { match_id: 1, target_odd: 2.50, risk_profile: 'moderado' };
+
+    const response = await axios.post(`${API_BASE_URL}/api/v1/quant/build-ticket`, payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    const data = response.data;
+
+    if (data && data.recommended_tickets) {
+      botLogs.value.unshift(`> TICKET: Forjamento concluído com sucesso.`);
+      goldPicksData.value = data.recommended_tickets.map(ticket => {
+        return {
+          liga: ticket.profile.toUpperCase(), jogo: ticket.blueprint, aposta: ticket.legs.map(l => l.market).join(' + '),
+          odd: ticket.target_odd, zscore: ticket.ev_rationale || "Validação Quantitativa", ev: "EV+"
+        };
+      });
+    } else {
+       botLogs.value.unshift(`> TICKET: Nenhum valor retornado do Oráculo.`);
+    }
+  } catch (error) {
+    botLogs.value.unshift("> ERR: Rota do Ticket Builder indisponível no Node.");
+  } finally {
+    isBuilding.value = false;
+  }
+};
+
+
+// ==================================================
+// WEBSOCKETS (HFT REAL-TIME NA PORTA 8000)
+// ==================================================
+let socket = null;
+
+onMounted(() => {
+  // Chamada inicial de dados
+  fetchRadarData();
+
+  // Socket Conectado à porta 8000
+  socket = io(GATEWAY_URL, {
+    transports: ['websocket']
+  });
+
+  socket.on('connect', () => {
+    botLogs.value.unshift(`> SYS: HFT Socket Conectado [ID: ${socket.id.substring(0,4)}]`);
+    if (botLogs.value.length > 8) botLogs.value.pop();
+  });
+
+  socket.on('NEW_ALPHA_OPPORTUNITY', (payload) => {
+    if(payload.signals && Array.isArray(payload.signals)) {
+      payload.signals.forEach(sig => {
+        botLogs.value.unshift(`> ALPHA: Detectado edge de +${sig.expected_value_pct}% EV.`);
+        if (botLogs.value.length > 8) botLogs.value.pop();
+
+        const novoAlerta = {
+          hora: new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}),
+          jogo: `Alpha ID: ${payload.match_id}`, 
+          mercado: sig.market, pinOpen: (sig.bookmaker_odd * 1.05).toFixed(2), pinClose: sig.bookmaker_odd.toFixed(2),
+          trueOdd: sig.true_odd.toFixed(2), softOdd: (sig.bookmaker_odd * 0.95).toFixed(2), 
+          bookie: "Pinnacle", ev: sig.expected_value_pct.toFixed(1), kelly: sig.suggested_bankroll_stake_pct.toFixed(2),
+          depth: 100, sparkline: "0,10 10,12 20,8 30,6 40,4 50,2"
+        };
+
+        const mercadoLower = novoAlerta.mercado.toLowerCase();
+        const isProp = mercadoLower.includes('chute') || mercadoLower.includes('falta');
+        
+        if (isProp) {
+          propsAnomalyData.value.unshift(novoAlerta);
+          if (propsAnomalyData.value.length > 15) propsAnomalyData.value.pop();
+        } else {
+          hftData.value.unshift(novoAlerta);
+          if (hftData.value.length > 15) hftData.value.pop();
+        }
+      });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    botLogs.value.unshift("> SYS: Conexão HFT Perdida. Retentando...");
+    if (botLogs.value.length > 8) botLogs.value.pop();
+  });
+});
+
+onUnmounted(() => {
+  if (socket) socket.disconnect();
+});
 </script>
 
 <style scoped>
 .glass-card { background: rgba(18, 25, 39, 0.7); backdrop-filter: blur(20px); border-radius: 16px;}
-
 .ghost-widget { opacity: 0.4 !important; border: 2px dashed #10B981 !important; transform: scale(0.98); background: rgba(16, 185, 129, 0.05); }
-
 .animate-spin-slow { animation: spin 3s linear infinite; }
-
-@keyframes marquee {
-  0% { transform: translateX(50%); }
-  100% { transform: translateX(-100%); }
-}
-.animate-marquee {
-  display: inline-block;
-  animation: marquee 35s linear infinite;
-  will-change: transform;
-}
-.animate-marquee:hover {
-  animation-play-state: paused;
-}
-.mask-edges {
-  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
-}
 
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;

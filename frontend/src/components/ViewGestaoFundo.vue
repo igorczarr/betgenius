@@ -12,7 +12,7 @@
         <div class="text-left flex flex-col">
           <h2 class="text-2xl font-mono text-white tracking-widest drop-shadow-md">ALPHA FUND</h2>
           <span class="text-[10px] text-bet-primary uppercase tracking-widest font-bold flex items-center gap-1.5 mt-0.5">
-            <div class="w-1.5 h-1.5 bg-bet-primary rounded-full animate-pulse"></div> Gestão Quantitativa Ativa
+            <div class="w-1.5 h-1.5 bg-bet-primary rounded-full animate-pulse"></div> Gestão Quantitativa ({{ globalState?.uiMode || 'REAL' }})
           </span>
         </div>
       </div>
@@ -21,21 +21,21 @@
         
         <div class="flex flex-col items-start xl:items-end w-[45%] md:w-auto">
           <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><Activity size="12"/> Exposição Ativa</span>
-          <span class="text-lg font-mono text-white">R$ 42.500 <span class="text-[10px] text-gray-500 bg-white/5 px-1.5 py-0.5 rounded ml-1">2.4%</span></span>
+          <span class="text-lg font-mono text-white">{{ statsBanca.exposicao }} <span class="text-[10px] text-gray-500 bg-white/5 px-1.5 py-0.5 rounded ml-1">{{ statsBanca.exposicaoPct }}%</span></span>
         </div>
         
         <div class="hidden md:block w-px bg-gradient-to-b from-transparent via-white/10 to-transparent h-12"></div>
         
         <div class="flex flex-col items-start xl:items-end w-[45%] md:w-auto">
           <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><Target size="12"/> Yield (All-Time)</span>
-          <span class="text-xl font-mono text-[#10B981] font-bold">+8.42% <span class="text-[10px] text-[#10B981] bg-[#10B981]/10 px-1.5 py-0.5 rounded ml-1 border border-[#10B981]/20">Alpha</span></span>
+          <span class="text-xl font-mono text-[#10B981] font-bold">{{ statsBanca.yield }}% <span class="text-[10px] text-[#10B981] bg-[#10B981]/10 px-1.5 py-0.5 rounded ml-1 border border-[#10B981]/20">Alpha</span></span>
         </div>
 
         <div class="hidden md:block w-px bg-gradient-to-b from-transparent via-white/10 to-transparent h-12"></div>
 
         <div class="flex flex-col items-start xl:items-end w-full md:w-auto mt-4 md:mt-0 bg-black/30 p-3 rounded-lg border border-white/5 shadow-inner">
           <span class="text-[10px] text-bet-primary uppercase tracking-widest font-bold mb-1">AUM (Assets Under Mgt)</span>
-          <span class="text-3xl font-mono text-white font-bold drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] tracking-tight">R$ 1.745.250</span>
+          <span class="text-3xl font-mono text-white font-bold drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] tracking-tight">{{ statsBanca.aum }}</span>
         </div>
 
       </div>
@@ -75,22 +75,22 @@
               <div class="grid grid-cols-4 gap-3">
                 <div class="bg-black/20 border border-white/5 p-3 rounded-xl flex flex-col">
                   <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Z-Score (Significância)</span>
-                  <span class="text-xl font-mono text-[#10B981] font-bold mt-1">3.45</span>
+                  <span class="text-xl font-mono text-[#10B981] font-bold mt-1">{{ statsPerformance.zScore }}</span>
                   <span class="text-[8px] text-gray-600 mt-1 uppercase">Prob. Sorte: &lt; 0.1%</span>
                 </div>
                 <div class="bg-black/20 border border-white/5 p-3 rounded-xl flex flex-col">
                   <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Turnover (Volume)</span>
-                  <span class="text-xl font-mono text-white font-bold mt-1">R$ 8.2M</span>
+                  <span class="text-xl font-mono text-white font-bold mt-1">{{ statsPerformance.turnover }}</span>
                   <span class="text-[8px] text-gray-600 mt-1 uppercase">Total Injetado</span>
                 </div>
                 <div class="bg-black/20 border border-white/5 p-3 rounded-xl flex flex-col">
                   <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">ROI Ponderado</span>
-                  <span class="text-xl font-mono text-bet-primary font-bold mt-1">+21.4%</span>
+                  <span class="text-xl font-mono text-bet-primary font-bold mt-1">{{ statsPerformance.roi }}</span>
                   <span class="text-[8px] text-gray-600 mt-1 uppercase">Crescimento Fundo</span>
                 </div>
                 <div class="bg-black/20 border border-white/5 p-3 rounded-xl flex flex-col">
                   <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">CLV Beating Rate</span>
-                  <span class="text-xl font-mono text-yellow-500 font-bold mt-1">82.1%</span>
+                  <span class="text-xl font-mono text-yellow-500 font-bold mt-1">{{ statsPerformance.clvRate }}</span>
                   <span class="text-[8px] text-gray-600 mt-1 uppercase">Linhas batidas no Fech.</span>
                 </div>
               </div>
@@ -130,17 +130,16 @@
             <template #icone><ShieldAlert :size="16" color="#EF4444" /></template>
             
             <div class="flex flex-col gap-4 mt-2 h-full">
-              
               <div class="bg-[#121927] border border-white/5 p-4 rounded-xl flex flex-col relative overflow-hidden shadow-inner">
                 <div class="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-2xl"></div>
                 <div class="flex justify-between items-start mb-4">
                   <div class="flex flex-col">
                     <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold flex items-center gap-1"><TrendingDown size="12" class="text-red-500"/> Current Drawdown</span>
-                    <span class="text-2xl font-mono text-red-400 font-bold drop-shadow-md">-4.2%</span>
+                    <span class="text-2xl font-mono text-red-400 font-bold drop-shadow-md">{{ statsRisco.drawdownAtual }}</span>
                   </div>
                   <div class="flex flex-col items-end">
                     <span class="text-[9px] text-gray-500 uppercase tracking-widest">Max Histórico</span>
-                    <span class="text-sm font-mono text-white">-14.8%</span>
+                    <span class="text-sm font-mono text-white">{{ statsRisco.drawdownMax }}</span>
                   </div>
                 </div>
                 
@@ -149,25 +148,24 @@
                     <span>Seguro</span><span>Perigo</span><span>Ruína</span>
                   </div>
                   <div class="w-full h-2 bg-gray-800 rounded-full overflow-hidden flex">
-                    <div class="h-full w-[15%] bg-red-500 shadow-[0_0_10px_#EF4444]"></div>
+                    <div class="h-full bg-red-500 shadow-[0_0_10px_#EF4444] transition-all duration-1000" :style="`width: ${statsRisco.riscoRuinaGauge}%`"></div>
                   </div>
-                  <span class="text-[9px] text-gray-400 mt-1">Risco de Ruína (Monte Carlo): <strong class="text-white">0.02%</strong></span>
+                  <span class="text-[9px] text-gray-400 mt-1">Risco de Ruína (Monte Carlo): <strong class="text-white">{{ statsRisco.riscoRuinaPct }}</strong></span>
                 </div>
               </div>
 
               <div class="grid grid-cols-2 gap-3 mt-auto">
                 <div class="bg-black/30 border border-white/5 p-3 rounded-lg flex flex-col gap-1 shadow-sm hover:border-white/20 transition-colors">
                   <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Sharpe Ratio</span>
-                  <span class="text-xl font-mono text-white font-bold">1.84</span>
+                  <span class="text-xl font-mono text-white font-bold">{{ statsRisco.sharpe }}</span>
                   <span class="text-[8px] text-green-400 uppercase tracking-widest mt-0.5">Excelente</span>
                 </div>
                 <div class="bg-black/30 border border-white/5 p-3 rounded-lg flex flex-col gap-1 shadow-sm hover:border-white/20 transition-colors">
                   <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Pior Bad Run</span>
-                  <span class="text-xl font-mono text-red-500 font-bold">11 Ls</span>
+                  <span class="text-xl font-mono text-red-500 font-bold">{{ statsRisco.badRun }}</span>
                   <span class="text-[8px] text-gray-600 uppercase tracking-widest mt-0.5">Out 2024</span>
                 </div>
               </div>
-
             </div>
           </WidgetCard>
 
@@ -189,15 +187,16 @@
                   <span class="col-span-2 text-center">Yield</span>
                   <span class="col-span-3 text-right">Weight</span>
                 </div>
+                <div v-if="edgeMercado.length === 0" class="text-center py-4 text-gray-500 text-[9px] uppercase font-mono">Sem dados alocados.</div>
                 <div v-for="(edge, i) in edgeMercado" :key="'em'+i" class="grid grid-cols-12 items-center py-2 border-b border-white/5 group">
                   <span class="col-span-4 text-xs font-bold text-white group-hover:text-[#a855f7] transition-colors truncate">{{ edge.nome }}</span>
-                  <span class="col-span-3 text-center text-xs font-mono text-gray-400">{{ edge.volume }}k</span>
+                  <span class="col-span-3 text-center text-xs font-mono text-gray-400">{{ edge.volume }}</span>
                   <div class="col-span-2 flex justify-center">
                     <span class="text-xs font-mono font-bold px-1.5 py-0.5 rounded border" :class="edge.yield > 0 ? 'bg-[#10B981]/10 text-[#10B981] border-[#10B981]/30' : 'bg-red-500/10 text-red-500 border-red-500/30'">{{ edge.yield > 0 ? '+' : ''}}{{ edge.yield }}%</span>
                   </div>
                   <div class="col-span-3 flex items-center justify-end gap-2">
                     <span class="text-[9px] text-gray-500 font-mono">{{ edge.weight }}%</span>
-                    <div class="w-12 h-1.5 bg-gray-800 rounded-full overflow-hidden"><div class="h-full bg-[#a855f7]" :style="`width: ${edge.weight}%`"></div></div>
+                    <div class="w-12 h-1.5 bg-gray-800 rounded-full overflow-hidden"><div class="h-full bg-[#a855f7] transition-all" :style="`width: ${edge.weight}%`"></div></div>
                   </div>
                 </div>
               </div>
@@ -211,13 +210,13 @@
                 </div>
                 <div v-for="(edge, i) in edgeOdds" :key="'eo'+i" class="grid grid-cols-12 items-center py-2 border-b border-white/5 group">
                   <span class="col-span-4 text-xs font-mono font-bold text-white group-hover:text-bet-primary transition-colors">@{{ edge.range }}</span>
-                  <span class="col-span-3 text-center text-xs font-mono text-gray-400">{{ edge.volume }}k</span>
+                  <span class="col-span-3 text-center text-xs font-mono text-gray-400">{{ edge.volume }}</span>
                   <div class="col-span-2 flex justify-center">
                     <span class="text-xs font-mono font-bold px-1.5 py-0.5 rounded border" :class="edge.yield > 0 ? 'bg-[#10B981]/10 text-[#10B981] border-[#10B981]/30' : 'bg-red-500/10 text-red-500 border-red-500/30'">{{ edge.yield > 0 ? '+' : ''}}{{ edge.yield }}%</span>
                   </div>
                   <div class="col-span-3 flex items-center justify-end">
                     <div class="w-16 h-2 bg-gray-800 rounded-sm overflow-hidden flex" :class="edge.yield > 0 ? 'justify-start' : 'justify-end'">
-                      <div class="h-full" :class="edge.yield > 0 ? 'bg-[#10B981]' : 'bg-red-500'" :style="`width: ${Math.abs(edge.yield) * 4}%`"></div>
+                      <div class="h-full transition-all" :class="edge.yield > 0 ? 'bg-[#10B981]' : 'bg-red-500'" :style="`width: ${Math.abs(edge.yield) * 4}%`"></div>
                     </div>
                   </div>
                 </div>
@@ -225,7 +224,7 @@
 
               <div class="mt-auto pt-2 flex items-center gap-2">
                 <AlertOctagon size="12" class="text-yellow-500" />
-                <span class="text-[9px] text-gray-400 uppercase tracking-widest font-mono">Insight: O sistema encontrou vazamento de lucro no mercado de <strong class="text-white">Ambas Marcam</strong>.</span>
+                <span class="text-[9px] text-gray-400 uppercase tracking-widest font-mono">Insight: O sistema monitora vazamentos de lucro.</span>
               </div>
             </div>
           </WidgetCard>
@@ -235,12 +234,13 @@
             
             <div class="flex flex-col gap-4 mt-2 h-full">
               <div class="flex gap-4 items-center bg-black/20 p-4 rounded-xl border border-white/5 shadow-inner">
-                <div class="w-16 h-16 rounded-full border-[6px] border-gray-800 border-t-bet-primary border-r-bet-primary flex items-center justify-center transform -rotate-45 shadow-lg">
-                  <span class="text-[10px] font-mono font-bold text-white transform rotate-45">18%</span>
+                <div class="w-16 h-16 rounded-full border-[6px] border-gray-800 flex items-center justify-center transform -rotate-45 shadow-lg relative">
+                   <div class="absolute inset-[-6px] rounded-full border-[6px] border-transparent border-t-bet-primary border-r-bet-primary transition-all duration-1000" :style="`transform: rotate(${(statsAlocacao.exposicaoPct / 100) * 360}deg)`"></div>
+                   <span class="text-[10px] font-mono font-bold text-white transform rotate-45">{{ statsAlocacao.exposicaoPct }}%</span>
                 </div>
                 <div class="flex flex-col">
                   <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Exposição Atual da Banca</span>
-                  <span class="text-sm font-mono text-gray-300">R$ 314.145 alocados no mercado agora.</span>
+                  <span class="text-sm font-mono text-gray-300">{{ statsAlocacao.exposicaoValor }} alocados no mercado.</span>
                   <span class="text-[9px] text-bet-primary uppercase tracking-widest mt-1 border border-bet-primary/20 bg-bet-primary/10 w-max px-2 py-0.5 rounded">Operação Saudável</span>
                 </div>
               </div>
@@ -249,15 +249,15 @@
                 <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold border-b border-white/5 pb-1">Diretrizes do Algoritmo (Kelly)</span>
                 <div class="flex justify-between items-center bg-black/30 p-2.5 rounded-lg border border-white/5">
                   <span class="text-xs font-bold text-white">Multiplicador Kelly Fracionado</span>
-                  <span class="text-sm font-mono text-bet-secondary font-bold bg-bet-secondary/10 px-2 py-0.5 border border-bet-secondary/30 rounded">0.25 (1/4)</span>
+                  <span class="text-sm font-mono text-bet-secondary font-bold bg-bet-secondary/10 px-2 py-0.5 border border-bet-secondary/30 rounded">{{ statsAlocacao.kellyMult }}</span>
                 </div>
                 <div class="flex justify-between items-center bg-black/30 p-2.5 rounded-lg border border-white/5">
                   <span class="text-xs font-bold text-white">Unidade Padrão (1u) Recomendada</span>
-                  <span class="text-sm font-mono text-white font-bold border border-gray-700 bg-black px-2 py-0.5 rounded">R$ 17.452</span>
+                  <span class="text-sm font-mono text-white font-bold border border-gray-700 bg-black px-2 py-0.5 rounded">{{ statsAlocacao.unidade }}</span>
                 </div>
                 <div class="flex justify-between items-center bg-black/30 p-2.5 rounded-lg border border-white/5">
-                  <span class="text-xs font-bold text-white">Stake Máxima Recomendada (Max Bet)</span>
-                  <span class="text-sm font-mono text-yellow-500 font-bold border border-yellow-500/20 bg-yellow-500/10 px-2 py-0.5 rounded">3.0u</span>
+                  <span class="text-xs font-bold text-white">Stake Máxima (Max Bet)</span>
+                  <span class="text-sm font-mono text-yellow-500 font-bold border border-yellow-500/20 bg-yellow-500/10 px-2 py-0.5 rounded">{{ statsAlocacao.maxBet }}</span>
                 </div>
               </div>
             </div>
@@ -283,10 +283,14 @@
               </div>
               
               <div class="flex flex-col overflow-y-auto custom-scrollbar flex-1 max-h-[300px]">
+                <div v-if="ledgerOperacoes.length === 0" class="text-center text-[10px] text-gray-500 py-10 font-mono uppercase tracking-widest bg-black/10 rounded flex-1 flex items-center justify-center mt-2">
+                  Aguardando Operações...
+                </div>
+                
                 <div v-for="(op, i) in ledgerOperacoes" :key="'op'+i" class="grid grid-cols-12 items-center bg-black/10 even:bg-white/[0.01] hover:bg-white/5 border-b border-white/5 p-3 transition-colors group cursor-default">
                   
                   <div class="col-span-2 flex flex-col pl-1">
-                    <span class="text-[10px] font-mono text-gray-400 group-hover:text-white transition-colors">{{ op.ticker }}</span>
+                    <span class="text-[10px] font-mono text-gray-400 group-hover:text-white transition-colors">{{ op.ticker || `BET-${i}X` }}</span>
                     <span class="text-[8px] text-gray-600 font-mono">{{ op.hora }}</span>
                   </div>
 
@@ -301,16 +305,16 @@
 
                   <div class="col-span-2 flex flex-col items-center">
                     <span class="text-[10px] font-mono font-bold px-1.5 rounded border" :class="op.clv > 0 ? 'bg-[#10B981]/10 text-[#10B981] border-[#10B981]/30' : 'bg-red-500/10 text-red-500 border-red-500/30'">{{ op.clv > 0 ? '+' : ''}}{{ op.clv }}%</span>
-                    <span class="text-[8px] text-gray-500 font-mono uppercase mt-0.5">Fair: {{ op.fair }}</span>
+                    <span class="text-[8px] text-gray-500 font-mono uppercase mt-0.5">Fair: {{ op.fair || '-' }}</span>
                   </div>
                   
                   <div class="col-span-1 flex flex-col items-center">
-                    <span class="text-xs font-mono text-gray-300 bg-black px-1.5 py-0.5 rounded border border-gray-800">{{ op.stake }}u</span>
+                    <span class="text-xs font-mono text-gray-300 bg-black px-1.5 py-0.5 rounded border border-gray-800">{{ op.stake }}</span>
                   </div>
                   
                   <div class="col-span-2 flex justify-end items-center gap-3 pr-2">
-                    <span class="text-sm font-mono font-bold" :class="op.status === 'W' ? 'text-[#10B981] drop-shadow-[0_0_5px_rgba(16,185,129,0.3)]' : (op.status === 'L' ? 'text-red-500' : 'text-gray-400')">{{ op.pnl }}</span>
-                    <div class="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor]" :class="op.status === 'W' ? 'bg-[#10B981] text-[#10B981]' : (op.status === 'L' ? 'bg-red-500 text-red-500' : 'bg-gray-400 text-gray-400')"></div>
+                    <span class="text-sm font-mono font-bold" :class="op.status === 'W' ? 'text-[#10B981] drop-shadow-[0_0_5px_rgba(16,185,129,0.3)]' : (op.status === 'L' ? 'text-red-500' : 'text-gray-400')">{{ op.status === 'PENDING' ? 'LIVE' : op.pnl }}</span>
+                    <div class="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor]" :class="op.status === 'W' ? 'bg-[#10B981] text-[#10B981]' : (op.status === 'L' ? 'bg-red-500 text-red-500' : 'bg-yellow-500 text-yellow-500')"></div>
                   </div>
 
                 </div>
@@ -326,13 +330,18 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, inject } from 'vue';
 import draggable from 'vuedraggable';
 import { 
   Wallet, TrendingUp, TrendingDown, Crosshair, Target, Search,
   ShieldAlert, AlertTriangle, LayoutList, GripHorizontal, Activity, LineChart, PieChart, AlertOctagon
 } from 'lucide-vue-next';
 import WidgetCard from './WidgetCard.vue';
+import axios from 'axios';
+
+// FIX S-TIER: Configuração da Porta e Integração com Estado Global
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const globalState = inject('globalState');
 
 const layoutBanca = ref([
   { id: 'equity', span: 'col-span-1 xl:col-span-8' },
@@ -344,29 +353,43 @@ const layoutBanca = ref([
 
 const viewAtribuicao = ref('mercado');
 
-const edgeMercado = [
-  { nome: "Match Odds (1x2)", volume: "2,450", yield: 11.2, weight: 85 },
-  { nome: "Handicap Asiático", volume: "3,120", yield: 8.4, weight: 65 },
-  { nome: "Over 2.5 Gols", volume: "1,800", yield: 4.1, weight: 30 },
-  { nome: "Ambas Marcam (BTTS)", volume: "850", yield: -4.2, weight: 15 },
-];
+// ESTADO INICIAL ZERADO (Aguardando Banco)
+const statsBanca = ref({ exposicao: "R$ 0,00", exposicaoPct: "0.0", yield: "0.00", aum: "R$ 0,00" });
+const statsPerformance = ref({ zScore: "0.00", turnover: "R$ 0,00", roi: "0.0%", clvRate: "0.0%" });
+const statsRisco = ref({ drawdownAtual: "0.0%", drawdownMax: "0.0%", riscoRuinaPct: "0.0%", riscoRuinaGauge: 0, sharpe: "0.00", badRun: "0 Ls" });
+const statsAlocacao = ref({ exposicaoPct: 0, exposicaoValor: "R$ 0,00", kellyMult: "0.0", unidade: "R$ 0,00", maxBet: "0u" });
 
-const edgeOdds = [
-  { range: "1.50 - 1.80", volume: "1,400", yield: 2.1 },
-  { range: "1.81 - 2.20", volume: "3,800", yield: 14.5 },
-  { range: "2.21 - 3.00", volume: "2,100", yield: 8.2 },
-  { range: "3.01+", volume: "920", yield: -6.8 },
-];
+const edgeMercado = ref([]);
+const edgeOdds = ref([]);
+const ledgerOperacoes = ref([]);
 
-const ledgerOperacoes = ref([
-  { ticker: "ARS-LIV", hora: "Hoje, 16:00", jogo: "Arsenal x Liverpool", mercado: "Arsenal AH -0.5", odd: "1.95", stake: "2.0", pnl: "+1.90u", status: "W", clv: 4.2, fair: "1.87" },
-  { ticker: "RMA-SEV", hora: "Ontem, 20:30", jogo: "Real Madrid x Sevilla", mercado: "Real Madrid Vence (ML)", odd: "1.80", stake: "1.5", pnl: "+1.20u", status: "W", clv: 2.1, fair: "1.76" },
-  { ticker: "JUV-MIL", hora: "Ontem, 16:45", jogo: "Juventus x Milan", mercado: "BTTS - Sim", odd: "2.10", stake: "1.0", pnl: "-1.00u", status: "L", clv: -1.4, fair: "2.13" },
-  { ticker: "BAY-DOR", hora: "14 Fev, 15:30", jogo: "Bayern x Dortmund", mercado: "Over 3.5 Gols", odd: "2.25", stake: "1.0", pnl: "+1.25u", status: "W", clv: 8.5, fair: "2.05" },
-  { ticker: "PSG-MAR", hora: "12 Fev, 21:00", jogo: "PSG x Marseille", mercado: "PSG Vence HT", odd: "1.75", stake: "2.0", pnl: "-2.00u", status: "L", clv: 0.8, fair: "1.73" },
-  { ticker: "FLA-PAL", hora: "10 Fev, 16:00", jogo: "Flamengo x Palmeiras", mercado: "Under 2.5 Gols", odd: "1.65", stake: "3.0", pnl: "+1.95u", status: "W", clv: 3.2, fair: "1.60" },
-  { ticker: "MCI-CHE", hora: "08 Fev, 18:30", jogo: "Man City x Chelsea", mercado: "Man City AH -1.5", odd: "2.05", stake: "1.5", pnl: "+1.57u", status: "W", clv: 6.4, fair: "1.92" },
-]);
+// FETCH COM AUTENTICAÇÃO E MODO CORRETO
+const fetchGestaoData = async () => {
+  try {
+    const token = localStorage.getItem('betgenius_token');
+    const modoAtual = globalState?.uiMode || 'REAL'; // Usa o modo selecionado no TopBar/Config
+    
+    const response = await axios.get(`${API_BASE_URL}/api/v1/fund/dashboard?mode=${modoAtual}`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (response.data) {
+      const data = response.data;
+      statsBanca.value = data.statsBanca;
+      statsPerformance.value = data.statsPerformance;
+      statsRisco.value = data.statsRisco;
+      statsAlocacao.value = data.statsAlocacao;
+      edgeMercado.value = data.edgeMercado || [];
+      ledgerOperacoes.value = data.ledgerOperacoes || [];
+    }
+  } catch (error) {
+    console.error("❌ Falha ao buscar dados do Alpha Fund:", error);
+  }
+};
+
+onMounted(() => {
+  fetchGestaoData();
+});
 </script>
 
 <style scoped>

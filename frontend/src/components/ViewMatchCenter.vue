@@ -1,22 +1,23 @@
 <template>
   <div class="flex flex-col gap-6 w-full h-full relative fade-in-up pb-10">
     
-    <div class="glass-card p-6 md:p-8 relative flex flex-col md:flex-row justify-between items-center border-t-4 shadow-[0_15px_40px_rgba(0,0,0,0.6)]" :style="`border-color: ${partida.corCasa}`">
-      <div class="absolute -right-20 -top-20 w-72 h-72 rounded-full blur-[100px] pointer-events-none opacity-20" :style="`background-color: ${partida.corCasa}`"></div>
-      <div class="absolute -left-20 -bottom-20 w-72 h-72 rounded-full blur-[100px] pointer-events-none opacity-20" :style="`background-color: ${partida.corFora}`"></div>
+    <div class="glass-card p-6 md:p-8 relative flex flex-col md:flex-row justify-between items-center border-t-4 shadow-[0_15px_40px_rgba(0,0,0,0.6)] transition-all duration-500" :style="`border-color: ${partida.corCasa}`">
+      <div class="absolute -right-20 -top-20 w-72 h-72 rounded-full blur-[100px] pointer-events-none opacity-20 transition-colors duration-500" :style="`background-color: ${partida.corCasa}`"></div>
+      <div class="absolute -left-20 -bottom-20 w-72 h-72 rounded-full blur-[100px] pointer-events-none opacity-20 transition-colors duration-500" :style="`background-color: ${partida.corFora}`"></div>
       
       <div class="flex items-center gap-5 w-full md:w-2/5 justify-end z-10">
         <div class="text-right">
           <h2 class="text-3xl font-mono text-white tracking-wider drop-shadow-md">{{ partida.casa }}</h2>
-          <div class="flex items-center justify-end gap-2 mt-1">
+          <div class="flex items-center justify-end gap-2 mt-1" v-if="!isLoading">
             <span class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">{{ partida.posCasa }}º Lugar •</span>
             <div class="flex gap-0.5">
               <span v-for="(f, i) in partida.formCasa" :key="'fc'+i" class="w-4 h-4 flex items-center justify-center rounded-[3px] text-[8px] font-bold text-white shadow-sm" :class="f === 'W' ? 'bg-[#10B981]' : (f === 'D' ? 'bg-gray-500' : 'bg-red-500')">{{ f }}</span>
             </div>
           </div>
         </div>
-        <div class="w-20 h-20 rounded-full bg-[#121927] border-[3px] flex items-center justify-center shadow-[0_0_25px_rgba(0,0,0,0.8)] relative" :style="`border-color: ${partida.corCasa}`">
-          <Shield :size="36" :color="partida.corCasa" class="drop-shadow-[0_0_8px_currentColor]" />
+        <div class="w-20 h-20 rounded-full bg-[#121927] border-[3px] flex items-center justify-center shadow-[0_0_25px_rgba(0,0,0,0.8)] relative overflow-hidden transition-colors duration-500" :style="`border-color: ${partida.corCasa}`">
+          <img v-if="partida.casa !== '---'" :src="getTeamLogo(partida.casa)" @error="handleImageError" class="w-12 h-12 object-contain drop-shadow-[0_0_8px_currentColor]" />
+          <Shield v-else :size="36" color="#4B5563" class="drop-shadow-[0_0_8px_currentColor]" />
         </div>
       </div>
 
@@ -41,12 +42,13 @@
       </div>
 
       <div class="flex items-center gap-5 w-full md:w-2/5 justify-start z-10">
-        <div class="w-20 h-20 rounded-full bg-[#121927] border-[3px] flex items-center justify-center shadow-[0_0_25px_rgba(0,0,0,0.8)] relative" :style="`border-color: ${partida.corFora}`">
-          <ShieldAlert :size="36" :color="partida.corFora" class="drop-shadow-[0_0_8px_currentColor]" />
+        <div class="w-20 h-20 rounded-full bg-[#121927] border-[3px] flex items-center justify-center shadow-[0_0_25px_rgba(0,0,0,0.8)] relative overflow-hidden transition-colors duration-500" :style="`border-color: ${partida.corFora}`">
+          <img v-if="partida.fora !== '---'" :src="getTeamLogo(partida.fora)" @error="handleImageError" class="w-12 h-12 object-contain drop-shadow-[0_0_8px_currentColor]" />
+          <ShieldAlert v-else :size="36" color="#4B5563" class="drop-shadow-[0_0_8px_currentColor]" />
         </div>
         <div class="text-left">
           <h2 class="text-3xl font-mono text-white tracking-wider drop-shadow-md">{{ partida.fora }}</h2>
-          <div class="flex items-center justify-start gap-2 mt-1">
+          <div class="flex items-center justify-start gap-2 mt-1" v-if="!isLoading">
             <div class="flex gap-0.5">
               <span v-for="(f, i) in partida.formFora" :key="'ff'+i" class="w-4 h-4 flex items-center justify-center rounded-[3px] text-[8px] font-bold text-white shadow-sm" :class="f === 'W' ? 'bg-[#10B981]' : (f === 'D' ? 'bg-gray-500' : 'bg-red-500')">{{ f }}</span>
             </div>
@@ -57,7 +59,7 @@
     </div>
 
     <div v-if="isLoading" class="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-2">
-      <div v-for="i in 8" :key="i" class="h-[400px] skeleton-pulse rounded-2xl border border-white/5 shadow-2xl"></div>
+      <div v-for="i in 6" :key="i" class="h-[400px] skeleton-pulse rounded-2xl border border-white/5 shadow-2xl"></div>
     </div>
 
     <draggable 
@@ -81,14 +83,14 @@
             
             <div class="flex flex-col gap-4 h-full">
               <div class="flex flex-wrap gap-2 bg-black/30 p-2 rounded-xl border border-white/5 shadow-inner">
-                <select v-model="filtroJogosH2H" class="bg-black text-[10px] text-white border border-gray-700 rounded px-2 py-1 outline-none font-bold uppercase tracking-wider cursor-pointer hover:border-bet-primary focus:border-bet-primary transition-colors">
+                <select v-model="filtroJogosH2H" class="bg-black text-[10px] text-white border border-gray-700 rounded px-2 py-1 outline-none font-bold uppercase tracking-wider cursor-pointer hover:border-bet-primary transition-colors">
                   <option value="5">Últimos 5</option><option value="10">Últimos 10</option><option value="15">Últimos 15</option>
                 </select>
-                <select v-model="filtroLocalH2H" class="bg-black text-[10px] text-white border border-gray-700 rounded px-2 py-1 outline-none font-bold uppercase tracking-wider cursor-pointer hover:border-bet-primary focus:border-bet-primary transition-colors">
+                <select v-model="filtroLocalH2H" class="bg-black text-[10px] text-white border border-gray-700 rounded px-2 py-1 outline-none font-bold uppercase tracking-wider cursor-pointer hover:border-bet-primary transition-colors">
                   <option value="all">Casa/Fora</option><option value="home">Som. Casa</option><option value="away">Som. Fora</option>
                 </select>
-                <select v-model="filtroCompH2H" class="bg-black text-[10px] text-white border border-gray-700 rounded px-2 py-1 outline-none font-bold uppercase tracking-wider cursor-pointer hover:border-bet-primary flex-1 focus:border-bet-primary transition-colors">
-                  <option value="all">Todas Comp.</option><option value="league">Premier League</option>
+                <select v-model="filtroCompH2H" class="bg-black text-[10px] text-white border border-gray-700 rounded px-2 py-1 outline-none font-bold uppercase tracking-wider cursor-pointer hover:border-bet-primary flex-1 transition-colors">
+                  <option value="all">Todas Comp.</option><option value="league">Liga Atual</option>
                 </select>
               </div>
 
@@ -99,6 +101,7 @@
                   <span class="bg-[#121927] px-2.5 py-0.5 rounded text-white font-bold border border-gray-700 shadow-inner tracking-widest">{{ h2h.placar }}</span>
                   <span class="w-20 text-left truncate group-hover:text-white transition-colors" :class="{'text-bet-primary font-bold': h2h.win === 'fora', 'text-gray-400': h2h.win !== 'fora'}">{{ h2h.fora }}</span>
                 </div>
+                <div v-if="partida.historico.length === 0" class="text-center text-xs text-gray-500 py-6 font-mono uppercase tracking-widest">Sem histórico recente</div>
               </div>
 
               <div class="mt-1 border border-white/10 rounded-lg overflow-hidden bg-black/20 shadow-inner flex-1">
@@ -108,12 +111,12 @@
                   <span class="text-right text-white truncate px-2">{{ partida.fora }}</span>
                 </div>
                 <div class="flex flex-col text-[11px] font-mono text-gray-300">
-                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10 transition-colors"><span class="font-semibold">{{ partida.stats.pts }} <span class="text-[9px] text-gray-500">({{ partida.stats.pts_j }})</span></span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">PTS / J</span><span class="text-right font-semibold">{{ partida.stats.pts_f }} <span class="text-[9px] text-gray-500">({{ partida.stats.pts_jf }})</span></span></div>
-                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10 transition-colors"><span>{{ partida.stats.win }}%</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">Win Rate</span><span class="text-right">{{ partida.stats.win_f }}%</span></div>
-                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10 transition-colors"><span>{{ partida.stats.avg_g }} <span class="text-gray-600">/</span> {{ partida.stats.avg_gc }}</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">Gols F/S</span><span class="text-right">{{ partida.stats.avg_gf }} <span class="text-gray-600">/</span> {{ partida.stats.avg_gcf }}</span></div>
-                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10 transition-colors"><span class="text-bet-primary font-bold">{{ partida.stats.over }}%</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">Over 2.5</span><span class="text-right text-bet-primary font-bold">{{ partida.stats.over_f }}%</span></div>
-                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10 transition-colors"><span>{{ partida.stats.btts }}%</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">BTTS</span><span class="text-right">{{ partida.stats.btts_f }}%</span></div>
-                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10 transition-colors"><span>{{ partida.stats.pos }}%</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">Posse</span><span class="text-right">{{ partida.stats.pos_f }}%</span></div>
+                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10"><span class="font-semibold">{{ partida.stats.pts }} <span class="text-[9px] text-gray-500">({{ partida.stats.pts_j }})</span></span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">PTS / J</span><span class="text-right font-semibold">{{ partida.stats.pts_f }} <span class="text-[9px] text-gray-500">({{ partida.stats.pts_jf }})</span></span></div>
+                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10"><span>{{ partida.stats.win }}%</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">Win Rate</span><span class="text-right">{{ partida.stats.win_f }}%</span></div>
+                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10"><span>{{ partida.stats.avg_g }} <span class="text-gray-600">/</span> {{ partida.stats.avg_gc }}</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">Gols F/S</span><span class="text-right">{{ partida.stats.avg_gf }} <span class="text-gray-600">/</span> {{ partida.stats.avg_gcf }}</span></div>
+                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10"><span class="text-bet-primary font-bold">{{ partida.stats.over }}%</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">Over 2.5</span><span class="text-right text-bet-primary font-bold">{{ partida.stats.over_f }}%</span></div>
+                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10"><span>{{ partida.stats.btts }}%</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">BTTS</span><span class="text-right">{{ partida.stats.btts_f }}%</span></div>
+                  <div class="grid grid-cols-3 py-2 px-3 border-b border-white/5 even:bg-white/[0.02] hover:bg-white/10"><span>{{ partida.stats.pos }}%</span><span class="text-center text-[9px] text-gray-500 font-sans tracking-widest uppercase">Posse</span><span class="text-right">{{ partida.stats.pos_f }}%</span></div>
                 </div>
               </div>
 
@@ -134,7 +137,7 @@
             <template #icone><LayoutList :size="16" color="var(--bet-secondary)" /></template>
             <template #acoes>
               <select v-model="filtroJogosForma" class="bg-black/40 text-[10px] text-white border border-white/10 rounded px-2 py-1 outline-none font-bold uppercase tracking-wider cursor-pointer hover:border-bet-primary transition-colors">
-                <option value="5">5 Jogos</option><option value="10">10 Jogos</option><option value="15">15 Jogos</option>
+                <option value="5">5 Jogos</option><option value="10">10 Jogos</option>
               </select>
             </template>
             
@@ -220,11 +223,11 @@
                     <span class="font-mono text-sm w-12 text-right" :class="stat.fora > stat.casa ? 'text-white font-bold drop-shadow-[0_0_5px_rgba(255,255,255,0.3)]' : 'text-gray-500'">{{ stat.fora }}{{ stat.sufixo }}</span>
                   </div>
                   <div class="w-full h-2.5 bg-[#121927] rounded-full flex overflow-hidden shadow-inner border border-white/5">
-                    <div class="h-full transition-all duration-700 relative" :style="`width: ${(stat.casa / (stat.casa + stat.fora)) * 100}%; background-color: ${partida.corCasa}`">
+                    <div class="h-full transition-all duration-700 relative" :style="`width: ${(stat.casa / ((stat.casa + stat.fora) || 1)) * 100}%; background-color: ${partida.corCasa}`">
                       <div class="absolute inset-0 bg-gradient-to-r from-transparent to-white/20"></div>
                     </div>
                     <div class="h-full bg-black w-1 z-10"></div>
-                    <div class="h-full transition-all duration-700 relative" :style="`width: ${(stat.fora / (stat.casa + stat.fora)) * 100}%; background-color: ${partida.corFora}`">
+                    <div class="h-full transition-all duration-700 relative" :style="`width: ${(stat.fora / ((stat.casa + stat.fora) || 1)) * 100}%; background-color: ${partida.corFora}`">
                       <div class="absolute inset-0 bg-gradient-to-l from-transparent to-white/20"></div>
                     </div>
                   </div>
@@ -242,6 +245,8 @@
                 <option value="gols">Gols Marcados</option>
                 <option value="assists">Assistências</option>
                 <option value="faltas">Faltas</option>
+                <option value="escanteios">Team Corners (Escanteios)</option>
+                <option value="cartoes">Cartões (Cards)</option>
               </select>
             </template>
 
@@ -255,7 +260,6 @@
               
               <div class="flex flex-col gap-1.5 overflow-y-auto custom-scrollbar flex-1 pb-2 pr-1">
                 <div v-for="(prop, i) in currentPlayerProps" :key="'prop'+i" class="grid grid-cols-12 items-center bg-black/10 even:bg-white/[0.02] hover:bg-white/5 border-b border-white/5 p-3 transition-colors group cursor-default">
-                  
                   <div class="col-span-5 flex items-center gap-3 pl-1">
                     <div class="w-8 h-8 rounded-full flex items-center justify-center border-2 shadow-[0_0_10px_rgba(0,0,0,0.5)] shrink-0 bg-black/60" :style="`border-color: ${prop.time === partida.casa ? partida.corCasa : partida.corFora}80`">
                       <User size="14" :color="prop.time === partida.casa ? partida.corCasa : partida.corFora" />
@@ -278,6 +282,10 @@
                     <span class="text-xs font-mono font-bold bg-[#121927] px-3 py-1 rounded border border-gray-700 text-white group-hover:border-[#a855f7] transition-colors shadow-inner">{{ prop.fair }}</span>
                   </div>
                 </div>
+                
+                <div v-if="currentPlayerProps.length === 0" class="text-center text-xs text-gray-500 py-10 font-mono uppercase tracking-widest bg-black/10 flex-1 flex items-center justify-center">
+                  Dados Indisponíveis
+                </div>
               </div>
             </div>
           </WidgetCard>
@@ -285,14 +293,17 @@
           <WidgetCard v-else-if="element.id === 'mercados'" titulo="Value Finder & ATS Tracker" class="h-full">
             <template #icone><Percent :size="16" color="#3b82f6" /></template>
             <template #acoes>
-              <select v-model="filtroMercado" class="bg-black/40 text-[10px] text-white border border-white/10 rounded px-2 py-1 outline-none font-bold uppercase tracking-wider cursor-pointer hover:border-[#3b82f6] transition-colors">
-                <option value="all">Todos Mercados</option>
-                <option value="match_odds">Match Odds</option>
-                <option value="goals">Gols (O/U)</option>
-                <option value="handicap">Handicap</option>
-                <option value="props">Player Props</option>
-              </select>
-            </template>
+  <select v-model="filtroMercado" class="bg-black/40 text-[10px] text-white border border-white/10 rounded px-2 py-1 outline-none font-bold uppercase tracking-wider cursor-pointer hover:border-[#3b82f6] transition-colors">
+    <option value="all">Todos (+EV)</option>
+    <option value="match_odds">Match Odds (1X2)</option>
+    <option value="goals">Gols (O/U)</option>
+    <option value="btts">Ambas Marcam (BTTS)</option>
+    <option value="handicap">Handicap Asiático</option>
+    <option value="dnb">Draw No Bet (DNB)</option>
+    <option value="corners">Escanteios</option>
+    <option value="cards">Cartões</option>
+  </select>
+</template>
             
             <div class="flex flex-col h-full mt-3">
               <div class="grid grid-cols-12 px-3 pb-2 border-b border-white/10 text-[9px] uppercase font-bold text-gray-500 tracking-widest bg-black/40 rounded-t-lg pt-3">
@@ -336,7 +347,7 @@
                 </div>
                 
                 <div v-if="currentMercados.length === 0" class="text-center text-xs text-gray-500 py-10 font-mono uppercase tracking-widest bg-black/10 flex-1 flex items-center justify-center">
-                  Nenhum mercado encontrado
+                  Nenhum mercado de valor encontrado
                 </div>
               </div>
             </div>
@@ -352,7 +363,6 @@
             </template>
             
             <div class="flex flex-col gap-4 h-full mt-3">
-              
               <div v-if="mlTab === 'poisson'" class="flex flex-col h-full animate-fade-in">
                 <p class="text-[10px] text-gray-400 mb-2 leading-relaxed px-1">Matriz de probabilidade de <strong class="text-white">Placar Exato</strong> baseada no modelo de Poisson cruzado com o Expected Goals (xG).</p>
                 
@@ -412,8 +422,8 @@
                   </div>
 
                   <svg viewBox="0 0 100 40" class="w-full h-full overflow-visible preserve-3d px-8 pb-4" preserveAspectRatio="none">
-                    <polyline points="0,40 10,38 20,35 30,25 40,24 50,22 60,18 70,12 80,10 90,8 100,5" fill="none" :stroke="partida.corCasa" stroke-width="2" vector-effect="non-scaling-stroke" />
-                    <polyline points="0,40 10,39 20,38 30,36 40,30 50,28 60,25 70,26 80,24 90,20 100,18" fill="none" :stroke="partida.corFora" stroke-width="2" stroke-dasharray="2,2" vector-effect="non-scaling-stroke" />
+                    <polyline points="0,40 10,38 20,35 30,25 40,24 50,22 60,18 70,12 80,10 90,8 100,5" fill="none" :stroke="partida.corCasa !== '#374151' ? partida.corCasa : '#EF4444'" stroke-width="2" vector-effect="non-scaling-stroke" />
+                    <polyline points="0,40 10,39 20,38 30,36 40,30 50,28 60,25 70,26 80,24 90,20 100,18" fill="none" :stroke="partida.corFora !== '#374151' ? partida.corFora : '#3B82F6'" stroke-width="2" stroke-dasharray="2,2" vector-effect="non-scaling-stroke" />
                   </svg>
                 </div>
                 
@@ -434,23 +444,27 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import draggable from 'vuedraggable';
 import { 
   Shield, ShieldAlert, History, User, LineChart, 
   BrainCircuit, Scale, Gavel, CloudRain, Cpu, GripHorizontal, 
   LayoutList, Crosshair, Percent, Plus, ArrowRight, Grid, Activity
 } from 'lucide-vue-next';
+import axios from 'axios';
 import WidgetCard from './WidgetCard.vue';
 
-const isLoading = ref(false);
+// ==================================================
+// CONFIGURAÇÕES DA API BASE
+// ==================================================
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
+// ESTADO DA INTERFACE
+const isLoading = ref(true); // O Skeleton Load inicia ATIVADO
 const filtroJogosH2H = ref("5");
 const filtroLocalH2H = ref("all");
 const filtroCompH2H = ref("league");
-
 const filtroJogosForma = ref("5");
-
 const fbrefTab = ref("avancadas");
 const propsTab = ref("chutes");
 const filtroMercado = ref("all");
@@ -465,108 +479,84 @@ const layoutWidgets = ref([
   { id: 'ml', span: 'col-span-1 xl:col-span-4' }
 ]);
 
+// ==================================================
+// ESTADO REATIVO BASE (Vazio e Seguro)
+// ==================================================
 const partida = ref({
-  casa: "ARSENAL", fora: "LIVERPOOL", posCasa: 1, pontosCasa: 72, posFora: 2, pontosFora: 71,
-  corCasa: "#EF0107", corFora: "#00B2A9", placarCasa: 1, placarFora: 1, xgCasa: "1.84", xgFora: "0.92",
-  isLive: true, tempo: 68, hora: "16:00",
-  
-  formCasa: ['W', 'W', 'W', 'D', 'W'], formFora: ['W', 'D', 'W', 'W', 'W'],
-  historico: [
-    { data: "23 Dez 23", casa: "LIV", placar: "1-1", fora: "ARS", win: "draw" },
-    { data: "09 Abr 23", casa: "LIV", placar: "2-2", fora: "ARS", win: "draw" },
-  ],
+  casa: "---", fora: "---", posCasa: 0, pontosCasa: 0, posFora: 0, pontosFora: 0,
+  corCasa: "#374151", corFora: "#374151", placarCasa: "-", placarFora: "-", xgCasa: "-", xgFora: "-",
+  isLive: false, tempo: 0, hora: "--:--",
+  formCasa: [], formFora: [],
+  historico: [],
   stats: {
-    pts: 72, pts_j: 2.32, pts_f: 71, pts_jf: 2.29, win: 74, win_f: 68, avg_g: 2.4, avg_gc: 0.8, avg_gf: 2.2, avg_gcf: 1.1,
-    over: 65, over_f: 71, btts: 45, btts_f: 62, pos: 59, pos_f: 61, public: "60.1k", wage: "£166m", public_f: "53.2k", wage_f: "£136m"
+    pts: '-', pts_j: '-', pts_f: '-', pts_jf: '-', win: '-', win_f: '-', avg_g: '-', avg_gc: '-', avg_gf: '-', avg_gcf: '-', over: '-', over_f: '-', btts: '-', btts_f: '-', pos: '-', pos_f: '-'
   },
-  arbitro: "M. Oliver", arb_amarelos: "4.2", arb_vermelhos: "0.18", clima: "Chuva", temp: "14",
-
-  indFormCasa: [
-    { data: "14 Fev", adv: "Aston Villa", placar: "0-3", res: "W" },
-    { data: "10 Fev", adv: "West Ham", placar: "2-1", res: "W" },
-    { data: "03 Fev", adv: "Nott. Forest", placar: "1-2", res: "W" },
-    { data: "29 Jan", adv: "Crystal P.", placar: "1-1", res: "D" },
-    { data: "22 Jan", adv: "Brighton", placar: "4-0", res: "W" }
-  ],
-  indFormFora: [
-    { data: "15 Fev", adv: "Brentford", placar: "1-4", res: "W" },
-    { data: "11 Fev", adv: "Burnley", placar: "2-0", res: "W" },
-    { data: "04 Fev", adv: "Fulham", placar: "1-1", res: "D" },
-    { data: "30 Jan", adv: "Chelsea", placar: "4-1", res: "W" },
-    { data: "23 Jan", adv: "Bournemouth", placar: "0-2", res: "W" }
-  ],
-
-  fbrefOfensivas: [
-    { nome: "xG p/ 90", casa: 2.15, fora: 1.95, sufixo: "", desc: "Gols esperados por jogo" },
-    { nome: "Chutes no Gol", casa: 6.2, fora: 5.8, sufixo: "", desc: "Finalizações no alvo" },
-    { nome: "Grandes Chances", casa: 3.1, fora: 3.4, sufixo: "", desc: "Chances claras geradas" },
-  ],
-  fbrefDefensivas: [
-    { nome: "xGA p/ 90", casa: 0.85, fora: 1.12, sufixo: "", desc: "Gols sofridos esperados" },
-    { nome: "Desarmes T. Ataque", casa: 6.5, fora: 5.2, sufixo: "", desc: "Pressão no campo rival" },
-    { nome: "Faltas Cometidas", casa: 10.2, fora: 11.5, sufixo: "", desc: "Média de faltas" },
-  ],
-  fbrefAvancadas: [
-    { nome: "Posse de Bola", casa: 58, fora: 42, sufixo: "%", desc: "Controle territorial" },
-    { nome: "PPDA (Pressão)", casa: 8.4, fora: 11.2, sufixo: "", desc: "Passes p/ ação def. (Menor é melhor)" },
-    { nome: "Field Tilt", casa: 64, fora: 36, sufixo: "%", desc: "Domínio no terço final" },
-  ],
-  fbrefVariadas: [
-    { nome: "Dribles Certos", casa: 14.2, fora: 11.8, sufixo: "", desc: "Frequência de um-contra-um vencidos" },
-    { nome: "Cruzamentos", casa: 22.4, fora: 18.5, sufixo: "", desc: "Média de cruzamentos na área" },
-    { nome: "Interceptações", casa: 9.1, fora: 12.3, sufixo: "", desc: "Leitura defensiva" },
-  ],
-  
-  // Game State Analytics
-  gameState: [
-    { time: "ARSENAL", vencendo: "1.42", empatando: "2.10", perdendo: "3.25" },
-    { time: "LIVERPOOL", vencendo: "1.18", empatando: "1.95", perdendo: "2.84" }
-  ],
-
-  mercados: [
-    { nome: "Arsenal Vence (ML)", categoria: "match_odds", prob: 52.4, fair: "1.91", bookie: "2.10", openOdd: "2.25", ev: "9.9", casaNome: "Pinnacle" },
-    { nome: "Over 2.5 Gols", categoria: "goals", prob: 64.1, fair: "1.56", bookie: "1.65", openOdd: "1.50", ev: "5.7", casaNome: "Bet365" },
-    { nome: "Liverpool +0.5 (AH)", categoria: "handicap", prob: 47.6, fair: "2.10", bookie: "1.85", openOdd: "1.90", ev: "-11.9", casaNome: "Betfair" },
-    { nome: "BTTS (Ambas Marcam)", categoria: "goals", prob: 68.5, fair: "1.46", bookie: "1.52", openOdd: "1.60", ev: "4.1", casaNome: "1xBet" },
-    { nome: "B. Saka Over 0.5 Chutes", categoria: "props", prob: 71.2, fair: "1.40", bookie: "1.60", openOdd: "1.60", ev: "14.2", casaNome: "Betano" },
-  ],
+  arbitro: "---", arb_amarelos: "-", arb_vermelhos: "-", clima: "---", temp: "-",
+  indFormCasa: [], indFormFora: [],
+  fbrefOfensivas: [], fbrefDefensivas: [], fbrefAvancadas: [], fbrefVariadas: [],
+  gameState: [],
+  mercados: []
 });
 
-const currentFbrefStats = computed(() => {
-  if(fbrefTab.value === 'ofensivas') return partida.value.fbrefOfensivas;
-  if(fbrefTab.value === 'defensivas') return partida.value.fbrefDefensivas;
-  if(fbrefTab.value === 'variadas') return partida.value.fbrefVariadas;
-  return partida.value.fbrefAvancadas;
-});
+const playerPropsData = ref({ chutes: [], gols: [], assists: [], faltas: [] });
 
-const playerPropsMock = {
-  chutes: [
-    { nome: "B. Saka", time: "ARSENAL", avg: "2.8", prob: 71, fair: "1.40", war: 0.35 },
-    { nome: "M. Salah", time: "LIVERPOOL", avg: "3.1", prob: 65, fair: "1.54", war: 0.42 },
-    { nome: "M. Ødegaard", time: "ARSENAL", avg: "1.9", prob: 54, fair: "1.85", war: 0.28 },
-    { nome: "D. Núñez", time: "LIVERPOOL", avg: "2.4", prob: 49, fair: "2.04", war: 0.15 },
-  ],
-  gols: [
-    { nome: "M. Salah", time: "LIVERPOOL", avg: "0.8", prob: 42, fair: "2.38", war: 0.42 },
-    { nome: "B. Saka", time: "ARSENAL", avg: "0.6", prob: 38, fair: "2.63", war: 0.35 },
-    { nome: "G. Jesus", time: "ARSENAL", avg: "0.5", prob: 35, fair: "2.85", war: 0.20 },
-    { nome: "L. Díaz", time: "LIVERPOOL", avg: "0.4", prob: 28, fair: "3.57", war: 0.18 },
-  ],
-  assists: [
-    { nome: "M. Ødegaard", time: "ARSENAL", avg: "0.4", prob: 30, fair: "3.33", war: 0.28 },
-    { nome: "T. Arnold", time: "LIVERPOOL", avg: "0.5", prob: 28, fair: "3.57", war: 0.38 },
-  ],
-  faltas: [
-    { nome: "W. Endo", time: "LIVERPOOL", avg: "1.8", prob: 65, fair: "1.54", war: 0.10 },
-    { nome: "D. Rice", time: "ARSENAL", avg: "1.5", prob: 58, fair: "1.72", war: 0.32 },
-  ]
+// ==================================================
+// INTEGRAÇÃO DE ESCUDOS E API (Node.js)
+// ==================================================
+
+const getTeamLogo = (teamName) => {
+  if (!teamName || teamName === '---') return '';
+  const safeName = encodeURIComponent(teamName.trim());
+  return `${API_BASE_URL}/teams/shield/${safeName}`;
 };
 
+const handleImageError = (e) => {
+  e.target.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; 
+};
+
+const carregarDadosDaPartida = async () => {
+  isLoading.value = true;
+  try {
+    // No futuro, isso pegará o ID da rota: const matchId = route.params.id;
+    const matchId = 1; 
+    
+    // Conecta na sua nova rota da API usando axios
+    const response = await axios.get(`${API_BASE_URL}/match-center/${matchId}`);
+    
+    if (response.data) {
+      partida.value = response.data.partida;
+      playerPropsData.value = response.data.playerProps || { chutes: [], gols: [], assists: [], faltas: [] };
+    } else {
+      console.warn("⚠️ API de Match Center retornou vazio.");
+    }
+  } catch (error) {
+    console.error("❌ Erro ao buscar dados da partida:", error);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+onMounted(() => {
+  carregarDadosDaPartida();
+});
+
+// ==================================================
+// PROPRIEDADES COMPUTADAS
+// ==================================================
+
+const currentFbrefStats = computed(() => {
+  if(fbrefTab.value === 'ofensivas') return partida.value.fbrefOfensivas || [];
+  if(fbrefTab.value === 'defensivas') return partida.value.fbrefDefensivas || [];
+  if(fbrefTab.value === 'variadas') return partida.value.fbrefVariadas || [];
+  return partida.value.fbrefAvancadas || [];
+});
+
 const currentPlayerProps = computed(() => {
-  return playerPropsMock[propsTab.value] || [];
+  return playerPropsData.value[propsTab.value] || [];
 });
 
 const currentMercados = computed(() => {
+  if (!partida.value.mercados) return [];
   if(filtroMercado.value === 'all') return partida.value.mercados;
   return partida.value.mercados.filter(m => m.categoria === filtroMercado.value);
 });

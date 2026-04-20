@@ -12,7 +12,7 @@
         <div class="text-left flex flex-col">
           <h2 class="text-2xl font-mono text-white tracking-widest drop-shadow-md">SENTIMENT ENGINE</h2>
           <span class="text-[10px] text-[#a855f7] uppercase tracking-widest font-bold flex items-center gap-1.5 mt-0.5">
-            <div class="w-1.5 h-1.5 bg-[#a855f7] rounded-full animate-pulse"></div> NLP & Social Scraper Ativo
+            <div class="w-1.5 h-1.5 bg-[#a855f7] rounded-full" :class="{'animate-pulse': isConnected}"></div> {{ isConnected ? 'NLP & Social Scraper Ativo' : 'Conectando ao Radar...' }}
           </span>
         </div>
       </div>
@@ -20,14 +20,14 @@
       <div class="flex flex-wrap md:flex-nowrap justify-between xl:justify-end gap-6 md:gap-12 w-full xl:w-3/4 z-10">
         <div class="flex flex-col items-start xl:items-end w-[45%] md:w-auto">
           <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><Users size="12"/> Volume Social (24h)</span>
-          <span class="text-lg font-mono text-white">14.2M <span class="text-[10px] text-gray-500 bg-white/5 px-1.5 py-0.5 rounded ml-1 font-sans">Menções</span></span>
+          <span class="text-lg font-mono text-white">{{ statsMacro.socialVolume }} <span class="text-[10px] text-gray-500 bg-white/5 px-1.5 py-0.5 rounded ml-1 font-sans">Menções</span></span>
         </div>
         
         <div class="hidden md:block w-px bg-gradient-to-b from-transparent via-white/10 to-transparent h-12"></div>
         
         <div class="flex flex-col items-start xl:items-end w-[45%] md:w-auto">
           <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1 flex items-center gap-1"><Zap size="12"/> Alertas Institucionais</span>
-          <span class="text-xl font-mono text-yellow-500 font-bold">04 <span class="text-[10px] text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded ml-1 border border-yellow-500/20 font-sans">Anomalias</span></span>
+          <span class="text-xl font-mono text-yellow-500 font-bold">{{ statsMacro.alertasInst }} <span class="text-[10px] text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded ml-1 border border-yellow-500/20 font-sans">Anomalias</span></span>
         </div>
 
         <div class="hidden md:block w-px bg-gradient-to-b from-transparent via-white/10 to-transparent h-12"></div>
@@ -36,16 +36,23 @@
           <span class="text-[10px] text-[#a855f7] uppercase tracking-widest font-bold mb-1">Market Heat (Ganância/Medo)</span>
           <div class="flex items-center gap-3 mt-1">
             <div class="w-32 h-2 bg-gray-800 rounded-full overflow-hidden flex">
-              <div class="h-full bg-gradient-to-r from-blue-500 via-[#a855f7] to-red-500 w-[82%]"></div>
+              <div class="h-full bg-gradient-to-r from-blue-500 via-[#a855f7] to-red-500 transition-all duration-1000" :style="`width: ${statsMacro.marketHeat}%`"></div>
             </div>
-            <span class="text-2xl font-mono text-white font-bold drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] tracking-tight">82%</span>
+            <span class="text-2xl font-mono text-white font-bold drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] tracking-tight">{{ statsMacro.marketHeat }}%</span>
           </div>
-          <span class="text-[8px] text-red-400 font-bold uppercase tracking-widest mt-1">Status: Extrema Ganância (Hype)</span>
+          <span class="text-[8px] font-bold uppercase tracking-widest mt-1" :class="statsMacro.marketHeat > 70 ? 'text-red-400' : 'text-blue-400'">
+            Status: {{ statsMacro.marketHeat > 70 ? 'Extrema Ganância (Hype)' : 'Mercado Lento (Frio)' }}
+          </span>
         </div>
       </div>
     </div>
 
+    <div v-if="isLoading" class="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-2">
+      <div v-for="i in 4" :key="i" class="h-[300px] skeleton-pulse rounded-2xl border border-white/5 shadow-2xl"></div>
+    </div>
+
     <draggable 
+      v-else
       v-model="layoutSentimento" 
       item-key="id" 
       class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start mt-2" 
@@ -95,17 +102,17 @@
                     <div class="flex items-center gap-3">
                       <span class="text-[9px] text-gray-500 uppercase tracking-widest w-12 font-bold">Bilhetes</span>
                       <div class="flex-1 h-2.5 bg-gray-800 rounded flex overflow-hidden shadow-inner">
-                        <div class="h-full bg-blue-500 flex items-center px-1" :style="`width: ${flow.ticketCasa}%`"><span v-if="flow.ticketCasa > 20" class="text-[7px] text-white font-bold leading-none">{{flow.ticketCasa}}%</span></div>
-                        <div class="h-full bg-gray-600" :style="`width: ${flow.ticketEmpate}%`"></div>
-                        <div class="h-full bg-red-500 flex items-center justify-end px-1" :style="`width: ${flow.ticketFora}%`"><span v-if="flow.ticketFora > 20" class="text-[7px] text-white font-bold leading-none">{{flow.ticketFora}}%</span></div>
+                        <div class="h-full bg-blue-500 flex items-center px-1 transition-all" :style="`width: ${flow.ticketCasa}%`"><span v-if="flow.ticketCasa > 20" class="text-[7px] text-white font-bold leading-none">{{flow.ticketCasa}}%</span></div>
+                        <div class="h-full bg-gray-600 transition-all" :style="`width: ${flow.ticketEmpate}%`"></div>
+                        <div class="h-full bg-red-500 flex items-center justify-end px-1 transition-all" :style="`width: ${flow.ticketFora}%`"><span v-if="flow.ticketFora > 20" class="text-[7px] text-white font-bold leading-none">{{flow.ticketFora}}%</span></div>
                       </div>
                     </div>
                     <div class="flex items-center gap-3">
                       <span class="text-[9px] text-[#10B981] uppercase tracking-widest w-12 font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.3)]">Dinheiro</span>
                       <div class="flex-1 h-2.5 bg-gray-800 rounded flex overflow-hidden shadow-inner">
-                        <div class="h-full bg-blue-500 flex items-center px-1" :style="`width: ${flow.moneyCasa}%`"><span v-if="flow.moneyCasa > 20" class="text-[7px] text-white font-bold leading-none">{{flow.moneyCasa}}%</span></div>
-                        <div class="h-full bg-gray-600" :style="`width: ${flow.moneyEmpate}%`"></div>
-                        <div class="h-full bg-red-500 flex items-center justify-end px-1" :style="`width: ${flow.moneyFora}%`"><span v-if="flow.moneyFora > 20" class="text-[7px] text-white font-bold leading-none">{{flow.moneyFora}}%</span></div>
+                        <div class="h-full bg-blue-500 flex items-center px-1 transition-all" :style="`width: ${flow.moneyCasa}%`"><span v-if="flow.moneyCasa > 20" class="text-[7px] text-white font-bold leading-none">{{flow.moneyCasa}}%</span></div>
+                        <div class="h-full bg-gray-600 transition-all" :style="`width: ${flow.moneyEmpate}%`"></div>
+                        <div class="h-full bg-red-500 flex items-center justify-end px-1 transition-all" :style="`width: ${flow.moneyFora}%`"><span v-if="flow.moneyFora > 20" class="text-[7px] text-white font-bold leading-none">{{flow.moneyFora}}%</span></div>
                       </div>
                     </div>
                   </div>
@@ -113,6 +120,9 @@
                   <div class="flex justify-between mt-2 pl-2 text-[8px] text-gray-500 uppercase font-mono font-bold">
                     <span>Casa</span> <span>Empate</span> <span>Fora</span>
                   </div>
+                </div>
+                <div v-if="moneyFlowData.length === 0" class="text-center text-xs text-gray-500 py-10 font-mono uppercase tracking-widest bg-black/10 rounded flex items-center justify-center mt-2">
+                  Analisando Livro de Ofertas...
                 </div>
               </div>
             </div>
@@ -125,11 +135,13 @@
               <div class="bg-[#121927] border border-white/5 p-4 rounded-xl flex items-center justify-between shadow-inner">
                 <div class="flex flex-col">
                   <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Time mais Hypado (24h)</span>
-                  <span class="text-xl font-mono text-white font-bold">Real Madrid</span>
-                  <span class="text-[9px] text-red-400 mt-1 uppercase bg-red-500/10 px-1.5 py-0.5 w-max rounded font-bold border border-red-500/20">Sentimento Irreal (+42% Overvalued)</span>
+                  <span class="text-xl font-mono text-white font-bold">{{ topHypedTeam.nome || '---' }}</span>
+                  <span v-if="topHypedTeam.nome" class="text-[9px] mt-1 uppercase px-1.5 py-0.5 w-max rounded font-bold border" :class="topHypedTeam.score > 80 ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-blue-400 bg-blue-500/10 border-blue-500/20'">
+                    {{ topHypedTeam.score > 80 ? 'Sentimento Irreal (Overvalued)' : 'Tração Orgânica (Saudável)' }}
+                  </span>
                 </div>
-                <div class="w-14 h-14 rounded-full border-4 border-[#a855f7]/30 flex items-center justify-center bg-black/50">
-                  <Flame size="20" class="text-[#a855f7] animate-pulse" />
+                <div class="w-14 h-14 rounded-full border-4 border-[#a855f7]/30 flex items-center justify-center bg-black/50 shrink-0">
+                  <Flame size="20" class="text-[#a855f7]" :class="{'animate-pulse': topHypedTeam.score > 80}" />
                 </div>
               </div>
 
@@ -142,9 +154,9 @@
                   </div>
                   <div class="flex items-center gap-3">
                     <div class="w-full h-1.5 bg-gray-800 rounded flex overflow-hidden">
-                      <div class="h-full bg-[#10B981]" :style="`width: ${item.positive}%`"></div>
-                      <div class="h-full bg-gray-500" :style="`width: ${item.neutral}%`"></div>
-                      <div class="h-full bg-red-500" :style="`width: ${item.negative}%`"></div>
+                      <div class="h-full bg-[#10B981] transition-all" :style="`width: ${item.positive}%`"></div>
+                      <div class="h-full bg-gray-500 transition-all" :style="`width: ${item.neutral}%`"></div>
+                      <div class="h-full bg-red-500 transition-all" :style="`width: ${item.negative}%`"></div>
                     </div>
                   </div>
                   <div class="flex justify-between text-[8px] text-gray-500 font-mono uppercase">
@@ -153,6 +165,7 @@
                     <span class="text-red-400">Neg: {{item.negative}}%</span>
                   </div>
                 </div>
+                <div v-if="nlpData.length === 0" class="text-center text-[10px] text-gray-500 py-4 font-mono uppercase tracking-widest">Minerando X e Fóruns...</div>
               </div>
             </div>
           </WidgetCard>
@@ -195,6 +208,9 @@
                     </button>
                   </div>
                 </div>
+                <div v-if="contrarianPicks.length === 0" class="text-center text-xs text-gray-500 py-10 font-mono uppercase tracking-widest bg-black/10 rounded flex-1 flex items-center justify-center">
+                  Ouvindo distorções do mercado...
+                </div>
               </div>
             </div>
           </WidgetCard>
@@ -229,6 +245,9 @@
                   </div>
 
                 </div>
+                <div v-if="newsScraperData.length === 0" class="text-center text-xs text-gray-500 py-10 font-mono uppercase tracking-widest bg-black/10 rounded flex-1 flex items-center justify-center mt-2">
+                  Scanner de Notícias Operando...
+                </div>
               </div>
             </div>
           </WidgetCard>
@@ -241,15 +260,26 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { io } from 'socket.io-client';
 import draggable from 'vuedraggable';
 import { 
   Users, Zap, GripHorizontal, ArrowLeftRight, MessageSquare, 
   Flame, Focus, Plus, Radio, Link
 } from 'lucide-vue-next';
 import WidgetCard from './WidgetCard.vue';
+import axios from 'axios';
 
-// ESTRUTURA DRAGGABLE (12 Colunas Totais)
+// ==================================================
+// CONFIGURAÇÕES DA API BASE E WEBSOCKET
+// ==================================================
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3000';
+
+const isLoading = ref(true);
+const isConnected = ref(false);
+
+// ESTRUTURA DRAGGABLE
 const layoutSentimento = ref([
   { id: 'money_flow', span: 'col-span-1 xl:col-span-8' },
   { id: 'nlp', span: 'col-span-1 xl:col-span-4' },
@@ -257,39 +287,97 @@ const layoutSentimento = ref([
   { id: 'scraper', span: 'col-span-1 xl:col-span-6' }
 ]);
 
-// DADOS MOCKADOS: SMART VS DUMB MONEY
-const moneyFlowData = ref([
-  { jogo: "Arsenal x Liverpool", mercado: "Match Odds", ticketCasa: 82, ticketEmpate: 10, ticketFora: 8, moneyCasa: 35, moneyEmpate: 15, moneyFora: 50, edge: 1 }, // Smart Money on Liverpool
-  { jogo: "Man City x Chelsea", mercado: "Over 2.5", ticketCasa: 90, ticketEmpate: 0, ticketFora: 10, moneyCasa: 92, moneyEmpate: 0, moneyFora: 8, edge: 0 }, // Consenso
-  { jogo: "Juventus x Milan", mercado: "Match Odds", ticketCasa: 65, ticketEmpate: 20, ticketFora: 15, moneyCasa: 20, moneyEmpate: 10, moneyFora: 70, edge: -1 }, // Trap on Juve
-  { jogo: "Bayern x Dortmund", mercado: "BTTS", ticketCasa: 88, ticketEmpate: 0, ticketFora: 12, moneyCasa: 45, moneyEmpate: 0, moneyFora: 55, edge: 1 }, // Smart on No BTTS
-]);
+// ==================================================
+// ESTADO REATIVO BASE (Inicia vazio)
+// ==================================================
+const statsMacro = ref({
+  socialVolume: "---",
+  alertasInst: "0",
+  marketHeat: 50 // Meio (Neutro)
+});
 
-// DADOS MOCKADOS: NLP SENTIMENT
-const nlpData = ref([
-  { time: "Real Madrid", score: 88, positive: 75, neutral: 15, negative: 10 },
-  { time: "Man Utd", score: 82, positive: 68, neutral: 20, negative: 12 },
-  { time: "B. Leverkusen", score: 76, positive: 60, neutral: 25, negative: 15 },
-]);
+const topHypedTeam = ref({ nome: "", score: 0 });
 
-// DADOS MOCKADOS: CONTRARIAN PICKS (+EV)
-const contrarianPicks = ref([
-  { liga: "Serie A (ITA)", jogo: "Juventus x Milan", publicOpinion: 65, aposta: "Milan AH +0.5", odd: "2.10" },
-  { liga: "Bundesliga", jogo: "Bayern x Dortmund", publicOpinion: 88, aposta: "BTTS - Não", odd: "2.35" },
-  { liga: "La Liga", jogo: "Sociedad x Betis", publicOpinion: 72, aposta: "Betis ML", odd: "3.40" }
-]);
+const moneyFlowData = ref([]);
+const nlpData = ref([]);
+const contrarianPicks = ref([]);
+const newsScraperData = ref([]);
 
-// DADOS MOCKADOS: NEWS SCRAPER
-const newsScraperData = ref([
-  { time: "Man City", tempo: "Há 12 min", tipo: "lesao", texto: "Rumor forte de lesão no treino: K. De Bruyne fora do derby.", fonte: "Twitter (Tier 1 Insiders)", confianca: 85 },
-  { time: "Chelsea", tempo: "Há 34 min", tipo: "odd", texto: "Odd ML Chelsea despencou de 3.20 para 2.85 em exchanges asiáticas.", fonte: "Pinnacle API Drop", confianca: 100 },
-  { time: "Napoli", tempo: "Há 1 hora", tipo: "noticia", texto: "Técnico confirma rotação agressiva de elenco focado na Champions.", fonte: "Coletiva de Imprensa", confianca: 95 },
-  { time: "Arsenal", tempo: "Há 2 horas", tipo: "odd", texto: "Over 2.5 recebendo R$ 1.2M de volume institucional nos últimos 30 min.", fonte: "Betfair Exchange", confianca: 90 },
-]);
+// ==================================================
+// MÉTODOS DE INGESTÃO (REST API)
+// ==================================================
+const carregarSentimentoGeral = async () => {
+  isLoading.value = true;
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/sentiment/dashboard`);
+    if (response.ok) {
+      const data = await response.json();
+      
+      // Mapeia os dados reais do banco
+      statsMacro.value = data.statsMacro || statsMacro.value;
+      moneyFlowData.value = data.moneyFlowData || [];
+      nlpData.value = data.nlpData || [];
+      contrarianPicks.value = data.contrarianPicks || [];
+      newsScraperData.value = data.newsScraperData || [];
+      
+      if(nlpData.value.length > 0) {
+        // Encontra o time com o maior score de hype para o card de destaque
+        topHypedTeam.value = nlpData.value.reduce((prev, current) => (prev.score > current.score) ? prev : current, {score: 0});
+      }
+    } else {
+       console.warn("⚠️ API do Sentiment Engine não conectada ainda. Aguardando HFT Websocket.");
+    }
+  } catch (error) {
+    console.error("❌ Falha ao buscar dados históricos de sentimento:", error);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+// ==================================================
+// WEBSOCKETS (HFT E ALERTAS AO VIVO)
+// ==================================================
+let socket = null;
+
+onMounted(() => {
+  // 1. Carrega o estado base da API
+  carregarSentimentoGeral();
+
+  // 2. Acopla o ouvido de Alta Frequência
+  socket = io(GATEWAY_URL, { transports: ['websocket'] });
+
+  socket.on('connect', () => {
+    isConnected.value = true;
+    console.log(`[HFT SOCKET] Sentiment Engine Conectado.`);
+  });
+
+  // O Node.js emitirá alertas de "Drop de Odds" e "Quebra de Notícias" neste canal
+  socket.on('MARKET_SENTIMENT_ALERT', (alerta) => {
+    if (alerta.tipo === 'money_flow') {
+      moneyFlowData.value.unshift(alerta.data);
+      if (moneyFlowData.value.length > 10) moneyFlowData.value.pop();
+    } 
+    else if (alerta.tipo === 'news' || alerta.tipo === 'odd_drop') {
+      newsScraperData.value.unshift(alerta.data);
+      if (newsScraperData.value.length > 15) newsScraperData.value.pop();
+    }
+  });
+
+  socket.on('disconnect', () => {
+    isConnected.value = false;
+    console.log(`[HFT SOCKET] Desconectado.`);
+  });
+});
+
+onUnmounted(() => {
+  if (socket) socket.disconnect();
+});
 </script>
 
 <style scoped>
 .glass-card { background: rgba(18, 25, 39, 0.75); border-radius: 16px; backdrop-filter: blur(24px); }
+.skeleton-pulse { background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.02) 75%); background-size: 400% 100%; animation: skeletonLoading 1.5s infinite ease-in-out; }
+@keyframes skeletonLoading { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 .ghost-widget { opacity: 0.3 !important; border: 2px dashed #a855f7 !important; transform: scale(0.98); }
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
