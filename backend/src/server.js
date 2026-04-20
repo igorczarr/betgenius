@@ -27,8 +27,8 @@ const server = http.createServer(app);
 // 2. Configuração do Socket.io com Blindagem de CORS
 const io = new Server(server, {
     cors: {
-        origin: process.env.FRONTEND_URL || "*", 
-        methods: ["GET", "POST"],
+        origin: ['https://betgenius-pi.vercel.app/', 'http://localhost:5173'], 
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
         credentials: true
     },
     // Otimizações para HFT (Baixa latência e pacotes comprimidos)
@@ -135,9 +135,8 @@ app.use('/api/v1', apiRoutes);
 // INICIALIZAÇÃO DO SERVIDOR
 // =====================================================================
 // 👇 AJUSTE VITAL: Escuta na porta 8000 para sincronizar com o Frontend
+// O jeito certo para a nuvem:
 const PORT = process.env.PORT || 8000;
 server.listen(PORT, () => {
-    console.log(`\n=============================================================`);
-    console.log(`🚀 [GATEWAY] BetGenius Hybrid Gateway operando na porta ${PORT}`);
-    console.log(`=============================================================\n`);
+    console.log(`🚀 Motor S-Tier rodando na porta ${PORT}`);
 });

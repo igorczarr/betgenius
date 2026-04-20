@@ -136,6 +136,9 @@ const isPreloading = ref(true);
 const activeSlide = ref(0);
 let slideInterval;
 
+// FIX S-TIER: URL Dinâmica da Nuvem
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 // Fallbacks caso o banco esteja vazio
 const slideImages = ref([
   'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1920&auto=format&fit=crop',
@@ -144,14 +147,14 @@ const slideImages = ref([
 ]);
 
 onMounted(async () => {
-  // Busca dinamicamente as imagens cadastradas na Configuração
+  // Busca dinamicamente as imagens na URL oficial (Render)
   try {
-    const response = await axios.get('http://localhost:8000/api/v1/system/config');
+    const response = await axios.get(`${API_BASE_URL}/api/v1/system/config`);
     if (response.data && response.data.login_images && response.data.login_images.length > 0) {
         slideImages.value = response.data.login_images.map(img => img.image_data);
     }
   } catch (error) {
-    console.log('Utilizando imagens padrão.');
+    console.log('Backend offline ou inacessível. Utilizando imagens padrão.');
   }
 
   setTimeout(() => {

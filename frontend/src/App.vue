@@ -165,6 +165,9 @@ import ViewHypeSentimento from './components/ViewHypeSentimento.vue';
 import ViewBacktestEngine from './components/ViewBacktestEngine.vue';
 import ViewConfig from './components/ViewConfig.vue';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8000';
+
 const globalState = reactive({ activeMatch: null, uiMode: 'REAL' });
 
 provide('globalState', globalState);
@@ -189,7 +192,7 @@ let pollingInterval;
 // ==========================================
 const fazerLogin = async (credenciais) => {
   try {
-    const response = await axios.post('http://localhost:8000/api/v1/auth/login', {
+    const response = await axios.post(`${API_BASE_URL}/api/v1/auth/login`, {
       email: credenciais.email,
       senha: credenciais.senha
     });
@@ -223,7 +226,7 @@ const restaurarSessao = async () => {
 
   try {
     // Busca a configuração mais atual no banco
-    const response = await axios.get('http://localhost:8000/api/v1/system/config', {
+    const response = await axios.get(`${API_BASE_URL}/api/v1/system/config`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     
@@ -273,11 +276,11 @@ const formatAlert = (alert) => {
 };
 
 const fetchHeartbeat = async () => {
-  try { const res = await axios.get('http://localhost:8000/api/v1/system/heartbeat'); systemStats.value = res.data; } catch (e) { }
+  try { const res = await axios.get(`${API_BASE_URL}/api/v1/system/heartbeat`); systemStats.value = res.data; } catch (e) { }
 };
 
 const fetchAlerts = async () => {
-  try { const res = await axios.get('http://localhost:8000/api/v1/system/alerts'); liveAlerts.value = res.data; } catch (e) { }
+  try { const res = await axios.get(`${API_BASE_URL}/api/v1/system/alerts`); liveAlerts.value = res.data; } catch (e) { }
 };
 
 const toggleCommandPalette = () => {
