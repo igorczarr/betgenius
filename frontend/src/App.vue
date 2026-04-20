@@ -310,7 +310,7 @@ onMounted(() => {
 
   // Inicialização Segura do WebSocket (Porta 8000)
   try {
-      const socket = io('ws://localhost:8000', { transports: ['websocket'] });
+      const socket = io(GATEWAY_URL, { transports: ['websocket'] });
       socket.on('connect', () => console.log('HFT WebSocket Conectado!'));
       socket.on('MARKET_SENTIMENT_ALERT', (payload) => {
           liveAlerts.value.unshift({ time: "Agora", tipo: payload.tipo || 'INFO', texto: payload.texto || 'Alerta HFT' });
