@@ -40,20 +40,19 @@ class XGBoostTrainer:
         self.models_dir = Path(__file__).parent / "models"
         self.models_dir.mkdir(exist_ok=True)
         
-        # O Arsenal de Variáveis S-Tier (Total: 28 Colunas)
+        # O Arsenal de Variáveis S-Tier (Total: 25 Colunas)
         self.features = [
             'delta_elo', 'delta_wage_pct', 
-            'delta_pontos', 'delta_posicao', # <-- Novas Variáveis de Classificação
+            'delta_pontos', 'delta_posicao', 
             'home_rest_days', 'away_rest_days', 
             'home_xg_for_ewma_micro', 'home_xg_against_ewma_micro',
             'away_xg_for_ewma_micro', 'away_xg_against_ewma_micro',
-            'home_xg_for_ewma_macro', 'away_xg_for_ewma_macro', # Substituí os Deltas de xG para dar mais resolução à IA
+            'home_xg_for_ewma_macro', 'away_xg_for_ewma_macro',
             'home_aggression_ewma', 'away_aggression_ewma', 
             'home_win_streak', 'home_winless_streak', 'away_win_streak', 'away_winless_streak',
             'home_tension_index', 'away_tension_index', 
             'home_fraudulent_defense', 'home_fraudulent_attack',
             'away_fraudulent_defense', 'away_fraudulent_attack',
-            'closing_odd_home', 'closing_odd_draw', 'closing_odd_away',
             'delta_market_respect' # O que o Dinheiro Asiático pensa
         ]
 
@@ -85,17 +84,27 @@ class XGBoostTrainer:
         
         # Cria a variável alvo consolidada para o XGBoost Multi-classe
         conditions = [
-            (df['target_home_win'] == 1),
-            (df['target_draw'] == 1),
-            (df['target_away_win'] == 1)
+            (df['home_goals'] > df['away_goals']),
+            (df['home_goals'] == df['away_goals']),
+            (df['home_goals'] < df['away_goals'])
         ]
         choices = [2, 1, 0] # 2: Home, 1: Draw, 0: Away
         df['target_1x2'] = np.select(conditions, choices, default=-1)
         
         # Remove lixo matemático e jogos cancelados
         df = df[df['target_1x2'] != -1]
+
+        # ==========================================
+        # INTERVENÇÃO DE ARQUITETO: ENGENHARIA DE DELTAS
+        # Recriamos os diferenciais absolutos que o XGBoost exige a partir dos dados em banco
+        # ==========================================
+        df['delta_elo'] = pd.to_numeric(df['home_elo_before'], errors='coerce') - pd.to_numeric(df['away_elo_before'], errors='coerce')
+        df['delta_wage_pct'] = pd.to_numeric(df['home_wage_pct'], errors='coerce') - pd.to_numeric(df['away_wage_pct'], errors='coerce')
+        df['delta_pontos'] = pd.to_numeric(df['home_pts_before'], errors='coerce') - pd.to_numeric(df['away_pts_before'], errors='coerce')
+        df['delta_posicao'] = pd.to_numeric(df['pos_tabela_away'], errors='coerce') - pd.to_numeric(df['pos_tabela_home'], errors='coerce') # Posição 1 é melhor que 20
+        df['delta_market_respect'] = pd.to_numeric(df['home_market_respect'], errors='coerce') - pd.to_numeric(df['away_market_respect'], errors='coerce')
         
-        # Garante que todos os tipos são numéricos
+        # Garante que todos os tipos da lista de features são numéricos
         for col in self.features:
             df[col] = pd.to_numeric(df[col], errors='coerce')
             
@@ -113,6 +122,11 @@ class XGBoostTrainer:
         y_train = train_df['target_1x2']
         X_test = test_df[self.features]
         y_test = test_df['target_1x2']
+        
+        # Passando as odds de fechamento para a simulação de lucro na avaliação
+        self.test_odds_home = pd.to_numeric(test_df['closing_odd_home'], errors='coerce').fillna(1.0)
+        self.test_odds_away = pd.to_numeric(test_df['closing_odd_away'], errors='coerce').fillna(1.0)
+        self.test_odds_draw = pd.to_numeric(test_df['closing_odd_draw'], errors='coerce').fillna(1.0)
         
         logger.info(f"📊 Treinando com {len(X_train)} jogos do passado.")
         logger.info(f"🔮 Testando cegamente em {len(X_test)} jogos do futuro.")
@@ -155,6 +169,46 @@ class XGBoostTrainer:
             logger.info("\nRelatório por Classe:\n" + report)
         except Exception:
             logger.warning("Relatório por classe indisponível (Amostra pequena).")
+            
+        # ==========================================
+        # SIMULAÇÃO DE FUNDO DE INVESTIMENTO (+EV)
+        # ==========================================
+        logger.info("💰 Simulando Operações Value Betting no Mercado de Fechamento...")
+        
+        prob_away = preds_proba[:, 0]
+        prob_draw = preds_proba[:, 1]
+        prob_home = preds_proba[:, 2]
+        
+        ev_home = (prob_home * self.test_odds_home.values) - 1.0
+        ev_away = (prob_away * self.test_odds_away.values) - 1.0
+        
+        # Estratégia de Sniper: Só aposta se o Edge for maior que 10% (0.10) e menor que 100% (evitar lixo estatístico)
+        EDGE_THRESHOLD = 0.10
+        MAX_EDGE = 1.00
+        
+        profit = 0.0
+        bets_placed = 0
+        
+        for i in range(len(y_test)):
+            target = y_test.iloc[i]
+            
+            # Operação a Favor do Mandante
+            if EDGE_THRESHOLD < ev_home[i] < MAX_EDGE:
+                bets_placed += 1
+                if target == 2: profit += (self.test_odds_home.values[i] - 1.0)
+                else: profit -= 1.0
+                
+            # Operação a Favor do Visitante
+            if EDGE_THRESHOLD < ev_away[i] < MAX_EDGE:
+                bets_placed += 1
+                if target == 0: profit += (self.test_odds_away.values[i] - 1.0)
+                else: profit -= 1.0
+                
+        roi = (profit / bets_placed) * 100 if bets_placed > 0 else 0.0
+        
+        logger.info(f"   -> Total de Apostas Sniper: {bets_placed}")
+        logger.info(f"   -> Lucro/Prejuízo Líquido: {profit:.2f} Unidades")
+        logger.info(f"   -> Retorno sobre o Investimento (ROI): {roi:.2f}%\n")
         
         # Salvando o Modelo
         model_path = self.models_dir / "xgb_match_odds.joblib"

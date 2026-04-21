@@ -2,7 +2,9 @@
 const express = require('express');
 const router = express.Router();
 
-// Controladores
+// =====================================================================
+// IMPORTAÇÃO DE CONTROLADORES (CORRIGIDA)
+// =====================================================================
 const ticketController = require('../controllers/ticketController');
 const teamController = require('../controllers/teamController');
 const matchController = require('../controllers/matchController');
@@ -12,6 +14,7 @@ const systemController = require('../controllers/systemController');
 const quantController = require('../controllers/quantController');
 const settlementController = require('../controllers/settlementController');
 const authController = require('../controllers/authController');
+const matchCenterController = require('../controllers/matchCenterController'); // <-- FIX: '../' em vez de './'
 
 // =====================================================================
 // HEALTHCHECK & SISTEMA BASE (TOPBAR E CONFIGS)
@@ -32,8 +35,10 @@ router.put('/system/config', systemController.updateConfig);
 // MATCH CENTER & RADAR ESPORTIVO
 // =====================================================================
 router.get('/matches/today', matchController.getTodayMatches);
-router.get('/match-center/:id', matchController.getMatchCenterData);
 router.get('/teams/shield/:teamName', teamController.getShield);
+
+// ROTA S-TIER: Apontando diretamente para o nosso novo construtor de JSON pesado
+router.get('/match-center/:matchId', matchCenterController.getMatchCenter);
 
 
 // =====================================================================

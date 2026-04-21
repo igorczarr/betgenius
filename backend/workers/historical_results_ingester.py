@@ -20,7 +20,7 @@ class HistoricalResultsIngester:
     """
     Motor de Ingestão de Partidas Históricas S-Tier.
     Devora arquivos CSV, lida com Ligas Elite (Temporadas) e Extras (Master CSVs),
-    normaliza nomes e injeta Closing Odds no Data Warehouse.
+    normaliza nomes, imputa médias em dados faltantes e injeta Closing Odds (1x2, O/U, BTTS) e Árbitros no Data Warehouse.
     """
     def __init__(self):
         self.start_year = 15 # 2015
@@ -33,21 +33,21 @@ class HistoricalResultsIngester:
             "soccer_spain_la_liga": "SP1",
             "soccer_italy_serie_a": "I1",
             "soccer_germany_bundesliga": "D1",
-            "soccer_uefa_champs_league": None, # Reservado para Etapa 2 (FBref)
+            "soccer_uefa_champs_league": None,
             
             # TIER 2
             "soccer_france_ligue_one": "F1",
             "soccer_netherlands_eredivisie": "N1",
             "soccer_portugal_primeira_liga": "P1",
-            "soccer_brazil_campeonato": "BRA", # Master CSV
-            "soccer_usa_mls": "USA",           # Master CSV
+            "soccer_brazil_campeonato": "BRA",
+            "soccer_usa_mls": "USA",
             
             # TIER 3
             "soccer_brazil_serie_b": None,
-            "soccer_sweden_allsvenskan": "SWE",# Master CSV
-            "soccer_norway_eliteserien": "NOR",# Master CSV
-            "soccer_denmark_superliga": "DNK", # Master CSV
-            "soccer_japan_j_league": "JPN",    # Master CSV
+            "soccer_sweden_allsvenskan": "SWE",
+            "soccer_norway_eliteserien": "NOR",
+            "soccer_denmark_superliga": "DNK",
+            "soccer_japan_j_league": "JPN",
             
             # CONTINENTAIS & SELEÇÕES
             "soccer_uefa_europa_league": None,
@@ -59,7 +59,6 @@ class HistoricalResultsIngester:
             "soccer_uefa_nations_league": None
         }
         
-        # Identificadores de ligas que não seguem o padrão de pastas por temporada
         self.extra_leagues = ["BRA", "USA", "SWE", "NOR", "DNK", "JPN"]
 
     def _build_url(self, code: str, year: int) -> str:
@@ -71,14 +70,18 @@ class HistoricalResultsIngester:
             return f"https://www.football-data.co.uk/mmz4281/{season_str}/{code}.csv"
 
     def _clean_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Peneira as colunas relevantes e remove dados corrompidos."""
+        """Peneira as colunas relevantes, padroniza e imputa médias S-Tier."""
         df = df.dropna(subset=['Date', 'HomeTeam', 'AwayTeam'])
         
+        # Colunas Alvo (incluindo O/U, BTTS, Referee)
+        # Notas do FB-Data: B365>2.5 (Over), B365<2.5 (Under), B365G (BTTS Sim), B365N (BTTS Não)
         target_cols = [
-            'Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR',
+            'Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR', 'Referee',
             'HS', 'AS', 'HST', 'AST', 'HF', 'AF', 'HC', 'AC', 'HY', 'AY', 'HR', 'AR',
-            'PSCH', 'PSCD', 'PSCA', # Pinnacle Closing
-            'B365H', 'B365D', 'B365A' # Bet365 Backup
+            'PSCH', 'PSCD', 'PSCA', # Pinnacle Closing 1X2
+            'B365H', 'B365D', 'B365A', # Bet365 Backup 1X2
+            'PC>2.5', 'PC<2.5', 'P>2.5', 'P<2.5', 'B365>2.5', 'B365<2.5', # Over/Under 2.5 (Pinnacle/Bet365)
+            'B365G', 'B365N' # Ambos Marcam (BTTS) Bet365
         ]
         
         available_cols = [col for col in target_cols if col in df.columns]
@@ -87,7 +90,21 @@ class HistoricalResultsIngester:
         # Padronização de Data
         df_clean['Date'] = pd.to_datetime(df_clean['Date'], dayfirst=True, errors='coerce')
         df_clean = df_clean.dropna(subset=['Date'])
-        df_clean = df_clean.fillna(0.0)
+        
+        # Motor S-Tier de Imputação por Média (Numeric Columns Only)
+        numeric_cols = df_clean.select_dtypes(include=['float64', 'int64']).columns
+        for col in numeric_cols:
+            if df_clean[col].isnull().any():
+                # Calcula a média da coluna desconsiderando os NaNs
+                col_mean = df_clean[col].mean()
+                # Se a média também for NaN (coluna inteira vazia), imputa 0.0
+                if pd.isna(col_mean): col_mean = 0.0
+                # Preenche os buracos com a média calculada
+                df_clean[col] = df_clean[col].fillna(col_mean)
+                logger.debug(f"Imputando média {col_mean:.2f} na coluna {col}")
+
+        # Colunas de texto que sobrarem (como Referee) preenchemos com 'Desconhecido'
+        df_clean = df_clean.fillna('Desconhecido')
         
         return df_clean
 
@@ -107,7 +124,6 @@ class HistoricalResultsIngester:
         """Processa o arquivo CSV, lida com transação e salva no Postgres."""
         if not code: return
 
-        # Se for Master CSV, processamos apenas na primeira iteração do loop (2015)
         if code in self.extra_leagues and year != self.start_year:
             return
             
@@ -134,7 +150,6 @@ class HistoricalResultsIngester:
                 for index, row in df.iterrows():
                     match_date = row['Date'].date()
                     
-                    # Definição dinâmica da Temporada
                     if code in self.extra_leagues:
                         season_label = str(match_date.year)
                         if match_date.year < 2015: continue 
@@ -143,8 +158,8 @@ class HistoricalResultsIngester:
                     
                     raw_home = str(row['HomeTeam'])
                     raw_away = str(row['AwayTeam'])
+                    referee = str(row.get('Referee', 'Desconhecido'))
                     
-                    # Normalização NLP
                     home_canonical = await entity_resolver.normalize_name(raw_home, is_pinnacle=False)
                     away_canonical = await entity_resolver.normalize_name(raw_away, is_pinnacle=False)
                     
@@ -153,52 +168,60 @@ class HistoricalResultsIngester:
                     
                     if not home_id or not away_id: continue
 
-                    def get_val(col, default=0.0):
-                        return float(row[col]) if col in df.columns else default
+                    def get_val(cols_list, default=0.0):
+                        for col in cols_list:
+                            if col in df.columns and pd.notna(row[col]) and row[col] != 'Desconhecido':
+                                return float(row[col])
+                        return default
 
-                    # Priorização Pinnacle -> Bet365
-                    odd_h = get_val('PSCH') if get_val('PSCH') > 0 else get_val('B365H')
-                    odd_d = get_val('PSCD') if get_val('PSCD') > 0 else get_val('B365D')
-                    odd_a = get_val('PSCA') if get_val('PSCA') > 0 else get_val('B365A')
+                    # 1X2 Odds (Prioriza Pinnacle Fechamento, depois Bet365)
+                    odd_h = get_val(['PSCH', 'B365H'])
+                    odd_d = get_val(['PSCD', 'B365D'])
+                    odd_a = get_val(['PSCA', 'B365A'])
+
+                    # O/U 2.5 Odds (Prioriza Pinnacle Closing, Pinnacle Open, Bet365)
+                    odd_over25 = get_val(['PC>2.5', 'P>2.5', 'B365>2.5'])
+                    odd_under25 = get_val(['PC<2.5', 'P<2.5', 'B365<2.5'])
+
+                    # BTTS Odds
+                    odd_btts_yes = get_val(['B365G'])
+                    odd_btts_no = get_val(['B365N'])
 
                     await conn.execute("""
                         INSERT INTO core.matches_history 
                         (sport_key, season, match_date, home_team_id, away_team_id, 
-                         home_goals, away_goals, match_result, 
+                         home_goals, away_goals, match_result, referee,
                          home_shots_target, away_shots_target, home_corners, away_corners,
                          home_fouls, away_fouls, home_yellow, away_yellow, home_red, away_red,
-                         closing_odd_home, closing_odd_draw, closing_odd_away)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+                         closing_odd_home, closing_odd_draw, closing_odd_away,
+                         odd_over_25, odd_under_25, odd_btts_yes, odd_btts_no)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
                         ON CONFLICT (match_date, home_team_id, away_team_id) DO UPDATE SET
                             home_goals=EXCLUDED.home_goals, away_goals=EXCLUDED.away_goals, match_result=EXCLUDED.match_result,
-                            home_shots_target=EXCLUDED.home_shots_target, closing_odd_home=EXCLUDED.closing_odd_home
+                            referee=EXCLUDED.referee, home_shots_target=EXCLUDED.home_shots_target,
+                            closing_odd_home=EXCLUDED.closing_odd_home, odd_over_25=EXCLUDED.odd_over_25, 
+                            odd_under_25=EXCLUDED.odd_under_25, odd_btts_yes=EXCLUDED.odd_btts_yes
                     """, 
                     sport_key, season_label, match_date, home_id, away_id,
-                    int(get_val('FTHG')), int(get_val('FTAG')), str(row.get('FTR', '')),
-                    int(get_val('HST')), int(get_val('AST')), int(get_val('HC')), int(get_val('AC')),
-                    int(get_val('HF')), int(get_val('AF')), int(get_val('HY')), int(get_val('AY')), int(get_val('HR')), int(get_val('AR')),
-                    odd_h, odd_d, odd_a)
+                    int(get_val(['FTHG'])), int(get_val(['FTAG'])), str(row.get('FTR', '')), referee,
+                    int(get_val(['HST'])), int(get_val(['AST'])), int(get_val(['HC'])), int(get_val(['AC'])),
+                    int(get_val(['HF'])), int(get_val(['AF'])), int(get_val(['HY'])), int(get_val(['AY'])), int(get_val(['HR'])), int(get_val(['AR'])),
+                    odd_h, odd_d, odd_a, odd_over25, odd_under25, odd_btts_yes, odd_btts_no)
                     
                     saved_matches += 1
 
-        logger.info(f"✅ {sport_key}: {saved_matches} jogos injetados com Closing Odds.")
+        logger.info(f"✅ {sport_key}: {saved_matches} jogos injetados com Odds e Referee.")
 
     async def run_ingestion(self):
         logger.info("🚀 INICIANDO INGESTOR DE RESULTADOS HISTÓRICOS (Etapa 1: Data Fusion)")
         await db.connect()
         await entity_resolver.load_mappings_from_db()
         
-        async def run_ingestion(self):
-            logger.info("🚀 INICIANDO INGESTOR DE RESULTADOS HISTÓRICOS (Etapa 1: Data Fusion)")
-            await db.connect()
-            await entity_resolver.load_mappings_from_db()
-        
         async with db.pool.acquire() as conn:
-            # 🧨 A SOLUÇÃO DEFINITIVA: 
-            # Purga a tabela antiga com o esquema corrompido para garantir uma recriação perfeita.
+            # Purga a tabela antiga com o esquema corrompido ou legado
             await conn.execute("DROP TABLE IF EXISTS core.matches_history CASCADE;")
             
-            # Agora ele vai recriar com todas as colunas atualizadas
+            # Recria a tabela suportando os novos mercados S-Tier
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS core.matches_history (
                     id SERIAL PRIMARY KEY,
@@ -210,6 +233,7 @@ class HistoricalResultsIngester:
                     home_goals INTEGER,
                     away_goals INTEGER,
                     match_result VARCHAR(5),
+                    referee VARCHAR(100),
                     home_shots_target INTEGER,
                     away_shots_target INTEGER,
                     home_corners INTEGER,
@@ -223,10 +247,13 @@ class HistoricalResultsIngester:
                     closing_odd_home NUMERIC(10,3),
                     closing_odd_draw NUMERIC(10,3),
                     closing_odd_away NUMERIC(10,3),
+                    odd_over_25 NUMERIC(10,3) DEFAULT 0.0,
+                    odd_under_25 NUMERIC(10,3) DEFAULT 0.0,
+                    odd_btts_yes NUMERIC(10,3) DEFAULT 0.0,
+                    odd_btts_no NUMERIC(10,3) DEFAULT 0.0,
                     xg_home NUMERIC(10,2) DEFAULT 0.0,
                     xg_away NUMERIC(10,2) DEFAULT 0.0,
                     attendance INTEGER DEFAULT 0,
-                    referee VARCHAR(100),
                     UNIQUE(match_date, home_team_id, away_team_id)
                 );
             """)
@@ -238,7 +265,7 @@ class HistoricalResultsIngester:
                     await self.process_season(sport_key, code, year, client)
                     
         await db.disconnect()
-        logger.info("🏆 INGESTÃO CONCLUÍDA. Partidas Históricas consolidadas no Postgres.")
+        logger.info("🏆 INGESTÃO CONCLUÍDA. Partidas Históricas S-Tier consolidadas no Postgres.")
 
 if __name__ == "__main__":
     ingester = HistoricalResultsIngester()

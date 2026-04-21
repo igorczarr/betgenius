@@ -11,21 +11,24 @@ class FBrefParser:
     """
     Motor de Extração S-Tier (Blindado).
     Captura colunas de forma irrestrita, achata cabeçalhos complexos
-    e realiza a limpeza de dados com tratamento rigoroso de anomalias.
+    e realiza a limpeza de dados com substituição bruta de strings para evitar falhas de Regex.
     """
     
     @staticmethod
     def extract_dataframes(html_content: str) -> dict:
         """Lê a página inteira, quebra as defesas do FBref e devolve dicionários limpos."""
         
-        # Guarda de Segurança S-Tier: Evita o erro de variável indefinida se o HTML falhar
         if not html_content or not isinstance(html_content, str):
             logger.warning("⚠️ Conteúdo HTML vazio ou inválido recebido no parser.")
             return {}
 
         try:
-            # A Chave Mestra: Remove comentários HTML para revelar tabelas escondidas
-            html_clean = re.sub(r'', '', html_content)
+            # FIX S-TIER (A BALA DE PRATA):
+            # Abandona o Regex que causa o "no such group". 
+            # Faz um replace bruto das tags de comentário. Isso "acorda" as tabelas ocultas
+            # instantaneamente e não trava o compilador do Python.
+            html_clean = html_content.replace('', '')
+            
             soup = BeautifulSoup(html_clean, 'lxml')
             
             tables = soup.find_all('table')
@@ -41,12 +44,15 @@ class FBrefParser:
                     
                     # Achatamento: Pega estritamente o último nível do header
                     if isinstance(df.columns, pd.MultiIndex):
-                        df.columns = [str(col[-1]).strip() for col in df.columns]
+                        # Junta os níveis de forma inteligente para não perder o prefixo 'Expected' no xG
+                        df.columns = ['_'.join(str(c) for c in col if c and not str(c).startswith('Unnamed')).strip() for col in df.columns]
                     else:
                         df.columns = [str(col).strip() for col in df.columns]
                     
                     # Expurgo: Remove linhas de "Squad Total" ou "Opponent Average"
-                    df = df[~df.iloc[:, 0].astype(str).str.contains("Total|Média|Average|Opponent", case=False, na=False)]
+                    if len(df.columns) > 0:
+                        first_col = df.columns[0]
+                        df = df[~df[first_col].astype(str).str.contains("Total|Média|Average|Opponent", case=False, na=False)]
                     
                     dataframes[table_id] = df
                 except Exception:
@@ -61,7 +67,7 @@ class FBrefParser:
     @staticmethod
     def extract_safe_value(df: pd.DataFrame, row_index: int, possible_cols: list, is_float: bool = True):
         """Caçador de Valores: Encontra o dado sem quebrar se a coluna mudar de nome."""
-        df_cols_lower = [str(c).lower().strip() for c in df.columns]
+        df_cols_lower = [str(c).lower().replace(' ', '_') for c in df.columns]
         
         for col_target in possible_cols:
             target = str(col_target).lower().strip()
@@ -81,7 +87,6 @@ class FBrefParser:
                 actual_col_name = df.columns[match_idx]
                 val = df.at[row_index, actual_col_name]
                 
-                # Defesa contra colunas duplicadas do FBref
                 if isinstance(val, pd.Series):
                     val = val.iloc[0]
                     
@@ -89,10 +94,11 @@ class FBrefParser:
                     if pd.isna(val): 
                         return 0.0 if is_float else 0
                     
-                    # Motor Financeiro: Converte "£ 1,500,000" para 1500000.0
-                    if isinstance(val, str) and any(s in val for s in ['£', '$', '€', ',']):
-                        clean_val = re.sub(r'[^\d.]', '', val)
-                        return float(clean_val) if clean_val else 0.0
+                    if isinstance(val, str):
+                        clean_val = re.sub(r'[^\d.-]', '', val)
+                        if not clean_val or clean_val == '-' or clean_val == '.': 
+                            return 0.0 if is_float else 0
+                        return float(clean_val) if is_float else int(float(clean_val))
                         
                     return float(val) if is_float else int(val)
                 except Exception:

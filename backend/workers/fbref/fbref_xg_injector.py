@@ -26,7 +26,7 @@ class FBrefFixturesInjector:
     """
     def __init__(self):
         self.start_year = 2015
-        self.end_year = 2023
+        self.end_year = 2024
         self.browser = None
 
     def _build_schedule_url(self, sport_key: str, year: int) -> tuple:
@@ -98,15 +98,29 @@ class FBrefFixturesInjector:
         return None
 
     def _extract_dataframe(self, html_content: str) -> pd.DataFrame:
-        """Limpa o HTML e puxa a tabela de calendário."""
+        """Limpa o HTML e puxa a tabela de calendário resolvendo as defesas do FBref com substituição bruta."""
         try:
-            # Pega todas as tabelas, tentamos achar a que tem as colunas chaves
-            dfs = pd.read_html(StringIO(html_content))
+            # FIX S-TIER (A BALA DE PRATA): 
+            # Sem regex complexo. Substituição bruta para libertar as tabelas dos comentários HTML.
+            html_clean = html_content.replace('', '')
+            
+            # Lê todas as tabelas do HTML destravado
+            dfs = pd.read_html(StringIO(html_clean))
+            
             for df in dfs:
+                # O Pandas às vezes puxa tabelas com MultiIndex (cabeçalhos aninhados). 
+                # Achatamos o MultiIndex de forma similar ao parser para garantir a compatibilidade
+                if isinstance(df.columns, pd.MultiIndex):
+                     df.columns = ['_'.join(str(c) for c in col if c and not str(c).startswith('Unnamed')).strip() for col in df.columns]
+                else:
+                     df.columns = [str(col).strip() for col in df.columns]
+                
+                # Se as colunas cruciais estiverem presentes, achamos nossa tabela!
                 if 'Home' in df.columns and 'Away' in df.columns and 'Date' in df.columns:
                     return df
-        except Exception:
-            pass
+                    
+        except Exception as e:
+            logger.debug(f"Aviso na extração do HTML: {e}")
         return pd.DataFrame()
 
     async def process_season(self, sport_key: str, year: int):
@@ -140,6 +154,7 @@ class FBrefFixturesInjector:
                         raw_away = str(row['Away'])
                         
                         # NLP Cruzamento: Isso garante que o 'Arsenal' daqui é o mesmo 'Arsenal' das Odds
+                        # O is_pinnacle=False significa que ele não vai batizar times novos, só cruzar com o que já existe (porque a Base já está cheia)
                         home_id = await conn.fetchval("SELECT id FROM core.teams WHERE canonical_name = $1", 
                                                       await entity_resolver.normalize_name(raw_home, is_pinnacle=False))
                         away_id = await conn.fetchval("SELECT id FROM core.teams WHERE canonical_name = $1", 
@@ -158,20 +173,27 @@ class FBrefFixturesInjector:
                         if 'Referee' in df.columns and not pd.isna(row['Referee']):
                             referee = str(row['Referee']).strip()
                             
-                        # Extração do xG (Se a coluna existir)
+                        # Extração Segura do xG
                         xg_home, xg_away = 0.0, 0.0
                         if 'xG' in df.columns:
                             # O FBref às vezes tem duas colunas xG (uma pro Home, outra pro Away)
-                            # O Pandas nomeia colunas duplicadas como xG e xG.1
+                            # O Pandas nomeia colunas duplicadas como xG e xG.1 (ou similares)
                             xg_cols = [c for c in df.columns if 'xG' in c]
                             if len(xg_cols) >= 2:
                                 val_h = row[xg_cols[0]]
                                 val_a = row[xg_cols[1]]
-                                xg_home = float(val_h) if pd.notna(val_h) else 0.0
-                                xg_away = float(val_a) if pd.notna(val_a) else 0.0
+                                
+                                # Sanitização S-Tier contra NaNs ou strings vazias
+                                if pd.notna(val_h):
+                                    clean_h = str(val_h).replace(' ', '')
+                                    if clean_h.replace('.', '', 1).isdigit(): xg_home = float(clean_h)
+                                    
+                                if pd.notna(val_a):
+                                    clean_a = str(val_a).replace(' ', '')
+                                    if clean_a.replace('.', '', 1).isdigit(): xg_away = float(clean_a)
 
                         # A MÁGICA: O UPDATE CIRÚRGICO
-                        # Nós achamos o jogo exato pela Data, Mandante e Visitante
+                        # Achamos o jogo exato pela Data, Mandante e Visitante
                         result = await conn.execute("""
                             UPDATE core.matches_history 
                             SET xg_home = $1, xg_away = $2, attendance = $3, referee = $4
@@ -183,6 +205,7 @@ class FBrefFixturesInjector:
                             updated_count += 1
                             
                     except Exception as e:
+                        # Falha silenciosa em uma linha não derruba o batch
                         continue
                         
         logger.info(f"✅ {sport_key}: {updated_count} partidas fundidas com sucesso (xG, Árbitro, Público).")

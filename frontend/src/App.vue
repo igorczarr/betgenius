@@ -10,7 +10,6 @@
 
     <div v-else class="app-master-layout relative z-10" :class="{ 'mobile-menu-open': isMobileMenuOpen }">
     
-
       <AppSidebar 
         :usuario-logado="usuarioLogado"
         :aba-ativa="abaAtiva"
@@ -168,13 +167,10 @@ import ViewConfig from './components/ViewConfig.vue';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8000';
 
+// ==========================================
+// 1. DECLARAÇÃO DE ESTADOS (STATE)
+// ==========================================
 const globalState = reactive({ activeMatch: null, uiMode: 'REAL' });
-
-provide('globalState', globalState);
-provide('openSmartTicket', () => { ticketAberto.value = true; });
-provide('changeGlobalTab', mudarAba);
-
-// ESTADO DA UI
 const usuarioLogado = ref(null);
 const ticketAberto = ref(false);
 const isMobileMenuOpen = ref(false);
@@ -182,15 +178,57 @@ const abaAtiva = ref('radar');
 const isCommandOpen = ref(false);
 const searchInput = ref(null);
 const watchlistCollapsed = ref(false);
+const isMobile = ref(false);
 
-// DADOS DA API
 const systemStats = ref({ mappedGames: 0, evOpportunities: 0, dailyProfit: 0.0, currentBankroll: 0.0 });
 const liveAlerts = ref([]);
 let pollingInterval;
 
 // ==========================================
-// 🔐 AUTENTICAÇÃO REAL E PERSISTÊNCIA (S-TIER)
+// 2. DECLARAÇÃO DE FUNÇÕES (FUNCTIONS)
 // ==========================================
+const mudarAba = (aba) => { 
+  abaAtiva.value = aba; 
+  isMobileMenuOpen.value = false; 
+};
+
+const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+const formatAlert = (alert) => {
+  let colorClass = 'text-gray-400';
+  let tag = '[SYSTEM]';
+  if(alert.tipo.includes('CRÍTICO')) { colorClass = 'text-red-400'; tag = '⚠️ [CRÍTICO]'; }
+  if(alert.tipo.includes('ODDS DROP')) { colorClass = 'text-yellow-400'; tag = '🔥 [STEAMER]'; }
+  return `<strong class="${colorClass}">${tag}</strong> ${alert.time}: ${alert.texto}`;
+};
+
+const restaurarSessao = async () => {
+  const token = localStorage.getItem('betgenius_token');
+  if (!token) return;
+
+  try {
+    const response = await axios.get(`${API_BASE_URL}/api/v1/system/config`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    const conf = response.data.user_config;
+    
+    usuarioLogado.value = {
+      name: conf.nome || "Admin",
+      role: conf.cargo || "Lead Quant Manager",
+      avatar: conf.avatar || "https://ui-avatars.com/api/?name=Admin&background=8cc7ff&color=000"
+    };
+    globalState.uiMode = conf.modo;
+
+    const wrapper = document.querySelector('.app-master-wrapper');
+    if (wrapper && conf.tema_interface) {
+        wrapper.setAttribute('data-theme', conf.tema_interface);
+    }
+  } catch (error) {
+    console.warn("Sessão expirada ou banco inacessível.");
+  }
+};
+
 const fazerLogin = async (credenciais) => {
   try {
     const response = await axios.post(`${API_BASE_URL}/api/v1/auth/login`, {
@@ -202,7 +240,6 @@ const fazerLogin = async (credenciais) => {
       const data = response.data;
       localStorage.setItem('betgenius_token', data.token);
       
-      // Atualiza a Placa-mãe instantaneamente
       usuarioLogado.value = {
         name: data.user.nome || "Admin",
         role: data.user.role || "Lead Quant Manager",
@@ -210,8 +247,6 @@ const fazerLogin = async (credenciais) => {
       };
       
       globalState.uiMode = data.user.modo;
-      
-      // Busca dados completos para aplicar o tema correto na raiz
       restaurarSessao();
     }
   } catch (error) {
@@ -221,59 +256,9 @@ const fazerLogin = async (credenciais) => {
   }
 };
 
-const restaurarSessao = async () => {
-  const token = localStorage.getItem('betgenius_token');
-  if (!token) return;
-
-  try {
-    // Busca a configuração mais atual no banco
-    const response = await axios.get(`${API_BASE_URL}/api/v1/system/config`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    const conf = response.data.user_config;
-    
-    // Alimenta a interface global
-    usuarioLogado.value = {
-      name: conf.nome || "Admin",
-      role: conf.cargo || "Lead Quant Manager",
-      avatar: conf.avatar || "https://ui-avatars.com/api/?name=Admin&background=8cc7ff&color=000"
-    };
-    globalState.uiMode = conf.modo;
-
-    // Aplica o tema na raiz
-    const wrapper = document.querySelector('.app-master-wrapper');
-    if (wrapper && conf.tema_interface) {
-        wrapper.setAttribute('data-theme', conf.tema_interface);
-    }
-
-  } catch (error) {
-    console.warn("Sessão expirada ou banco inacessível.");
-    // Não removemos o token aqui para não deslogar o usuário em caso de falha de rede temporária
-  }
-};
-
 const fazerLogout = () => { 
   localStorage.removeItem('betgenius_token');
   usuarioLogado.value = null; 
-};
-
-const mudarAba = (aba) => { 
-  abaAtiva.value = aba; 
-  isMobileMenuOpen.value = false; 
-};
-
-// ==========================================
-// HELPERS E BUSCA DE DADOS
-// ==========================================
-const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
-const formatAlert = (alert) => {
-  let colorClass = 'text-gray-400';
-  let tag = '[SYSTEM]';
-  if(alert.tipo.includes('CRÍTICO')) { colorClass = 'text-red-400'; tag = '⚠️ [CRÍTICO]'; }
-  if(alert.tipo.includes('ODDS DROP')) { colorClass = 'text-yellow-400'; tag = '🔥 [STEAMER]'; }
-  return `<strong class="${colorClass}">${tag}</strong> ${alert.time}: ${alert.texto}`;
 };
 
 const fetchHeartbeat = async () => {
@@ -294,22 +279,29 @@ const handleKeydown = (e) => {
   if (e.key === 'Escape' && isCommandOpen.value) isCommandOpen.value = false;
 };
 
-const isMobile = ref(false);
+// ==========================================
+// 3. DEPENDENCY INJECTION (PROVIDE)
+// CIRURGIA SÊNIOR: Os provides devem vir DEPOIS que as variáveis e funções foram declaradas
+// ==========================================
+provide('globalState', globalState);
+provide('openSmartTicket', () => { ticketAberto.value = true; });
+provide('changeGlobalTab', mudarAba);
 
+// ==========================================
+// 4. CICLO DE VIDA (LIFECYCLE)
+// ==========================================
 onMounted(() => { 
   document.title = "BetGenius Pro | Quant Terminal"; 
   isMobile.value = window.innerWidth < 1280;
   window.addEventListener('keydown', handleKeydown);
   window.addEventListener('resize', () => { isMobile.value = window.innerWidth < 1280; });
   
-  // ⚡ Tenta recuperar os dados do perfil via JWT ao iniciar
   restaurarSessao();
 
   fetchHeartbeat(); 
   fetchAlerts();
   pollingInterval = setInterval(() => { fetchHeartbeat(); fetchAlerts(); }, 60000);
 
-  // Inicialização Segura do WebSocket (Porta 8000)
   try {
       const socket = io(GATEWAY_URL, { transports: ['websocket'] });
       socket.on('connect', () => console.log('HFT WebSocket Conectado!'));
@@ -329,9 +321,6 @@ onUnmounted(() => {
 </script>
 
 <style>
-/* =======================================================
-   REMOVIDA FONTE LOCAL CORROMPIDA, INJETADA GOOGLE FONT
-   ======================================================= */
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
 
 @font-face { font-family: 'Lemon Milk'; src: url('./assets/fonts/LemonMilk.otf') format('opentype'); font-weight: normal; }
@@ -354,8 +343,6 @@ onUnmounted(() => {
 body { background: var(--bg-app); color: var(--text-main); font-family: 'Poppins', sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
 
 .font-mono { font-family: 'Lemon Milk', sans-serif; letter-spacing: 1px; }
-
-/* FIX S-TIER: Fonte Bebas Neue (Google Fonts) substituindo Jersey M54 */
 .font-jersey { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }
 
 .text-bet-primary { color: var(--bet-primary) !important; }
