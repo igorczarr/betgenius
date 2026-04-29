@@ -7,12 +7,11 @@ import numpy as np
 import sys
 import os
 from pathlib import Path
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-if sys.platform == "win32":
-    import codecs
-    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'replace')
-    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'replace')
+# Suprime o FutureWarning do Pandas 3.0
+pd.set_option('future.no_silent_downcasting', True)
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 ENV_PATH = BASE_DIR / '.env'
@@ -26,22 +25,26 @@ logger = logging.getLogger(__name__)
 
 class QuantMLBuilder:
     """
-    O Liquidificador S-Tier.
-    Funde todas as dimensões (Elo, Psicologia, Tensão, Mercado, Temporal), 
-    calcula Deltas e forja a 'quant_ml.feature_store' para o XGBoost.
+    O Liquidificador S-Tier (Rolling Update).
+    Funde todas as dimensões, calcula Deltas e forja a 'quant_ml.feature_store'.
+    Prepara os dados do passado (Treino) e injeta o futuro (Inferência).
     """
 
     async def initialize_schema(self, conn):
         await conn.execute("CREATE SCHEMA IF NOT EXISTS quant_ml;")
-        await conn.execute("DROP TABLE IF EXISTS quant_ml.feature_store CASCADE;")
+        # Removido o DROP TABLE CASCADE para permitir o Upsert Contínuo.
 
     def _calculate_standings_and_points(self, df: pd.DataFrame) -> pd.DataFrame:
         logger.info("📊 Mapeando Dinâmica de Campeonato (Pontos e Posição)...")
         
-        df['home_pts_earned'] = np.where(df['home_goals'] > df['away_goals'], 3, np.where(df['home_goals'] == df['away_goals'], 1, 0))
-        df['away_pts_earned'] = np.where(df['away_goals'] > df['home_goals'], 3, np.where(df['home_goals'] == df['away_goals'], 1, 0))
-        df['home_gd_earned'] = df['home_goals'] - df['away_goals']
-        df['away_gd_earned'] = df['away_goals'] - df['home_goals']
+        # Só ganha pontos e saldo se o jogo JÁ FOI FINALIZADO
+        finished = df['status'] == 'FINISHED'
+        
+        df['home_pts_earned'] = np.where(finished & (df['home_goals'] > df['away_goals']), 3, np.where(finished & (df['home_goals'] == df['away_goals']), 1, 0))
+        df['away_pts_earned'] = np.where(finished & (df['away_goals'] > df['home_goals']), 3, np.where(finished & (df['home_goals'] == df['away_goals']), 1, 0))
+        
+        df['home_gd_earned'] = np.where(finished, df['home_goals'] - df['away_goals'], 0)
+        df['away_gd_earned'] = np.where(finished, df['away_goals'] - df['home_goals'], 0)
 
         home_df = df[['match_id', 'match_date', 'sport_key', 'season', 'home_team_id', 'home_pts_earned', 'home_gd_earned']].copy()
         home_df.columns = ['match_id', 'date', 'league', 'season', 'team_id', 'pts_earned', 'gd_earned']
@@ -76,7 +79,7 @@ class QuantMLBuilder:
         return df
 
     async def build_matrix(self):
-        logger.info("[INIT] INICIANDO QUANT ML BUILDER: Forjando a Tabela Definitiva.")
+        logger.info("[INIT] INICIANDO QUANT ML BUILDER: Forjando a Feature Store.")
         await db.connect()
         
         async with db.pool.acquire() as conn:
@@ -84,21 +87,36 @@ class QuantMLBuilder:
             
             logger.info("📥 Executando Super-JOIN interdimensional no Data Warehouse...")
             
+            # ATUALIZADO: Inclui SCHEDULED e protege os Nulos
             query = """
                 SELECT 
                     -- DADOS BASE
-                    m.id as match_id, m.sport_key, m.season, m.match_date, 
+                    m.id as match_id, m.sport_key, m.season, m.match_date, m.status,
                     m.home_team_id, m.away_team_id, m.home_goals, m.away_goals,
-                    m.closing_odd_home, m.closing_odd_draw, m.closing_odd_away,
+                    m.ht_home_goals, m.ht_away_goals, m.ht_result,
                     
-                    -- DIMENSÃO: ELO CRU (Ajustado para a tabela nova)
+                    -- FÍSICA DO JOGO
+                    m.home_shots, m.away_shots, m.home_shots_target, m.away_shots_target,
+                    m.home_corners, m.away_corners, 
+                    m.home_yellow, m.away_yellow, m.home_red, m.away_red,
+                    
+                    -- ODDS BET365 E PINNACLE
+                    m.closing_odd_home, m.closing_odd_draw, m.closing_odd_away,
+                    m.odd_over_25, m.odd_under_25, m.odd_btts_yes, m.odd_btts_no,
+                    m.pin_odd_home, m.pin_odd_draw, m.pin_odd_away,
+                    m.pin_closing_home, m.pin_closing_draw, m.pin_closing_away,
+                    
+                    -- ASIAN HANDICAP
+                    m.ah_line, m.pin_ah_home, m.pin_ah_away, 
+                    m.pin_closing_ah_home, m.pin_closing_ah_away,
+                    
+                    -- DIMENSÃO: ELO CRU
                     eh.home_elo_before, eh.away_elo_before,
                     
                     -- DIMENSÃO: PEDIGREE E RIQUEZA
                     hp.league_tier, hp.avg_wage_percentile as home_wage_pct, ap.avg_wage_percentile as away_wage_pct,
                     
-                    -- DIMENSÃO: TEMPORAL
-                    t.home_rest_days, t.away_rest_days,
+                    -- DIMENSÃO: TEMPORAL (XG e Aggression)
                     t.home_xg_for_ewma_micro, t.home_xg_against_ewma_micro,
                     t.away_xg_for_ewma_micro, t.away_xg_against_ewma_micro,
                     t.home_xg_for_ewma_macro, t.away_xg_for_ewma_macro,
@@ -113,7 +131,7 @@ class QuantMLBuilder:
                     -- DIMENSÃO: MARKET RESPECT
                     mk.home_market_respect, mk.away_market_respect,
 
-                    -- DIMENSÃO: TENSÃO (Adicionado!)
+                    -- DIMENSÃO: TENSÃO
                     tn.home_tension_index, tn.away_tension_index
                     
                 FROM core.matches_history m
@@ -126,7 +144,7 @@ class QuantMLBuilder:
                 LEFT JOIN core.match_tension_features tn ON m.id = tn.match_id
                 
                 WHERE m.closing_odd_home > 0 AND m.closing_odd_away > 0
-                AND m.home_goals IS NOT NULL AND m.away_goals IS NOT NULL
+                AND m.status IN ('FINISHED', 'SCHEDULED')
                 ORDER BY m.match_date ASC
             """
             
@@ -137,12 +155,12 @@ class QuantMLBuilder:
                 return
 
             df = pd.DataFrame([dict(m) for m in matches])
-            logger.info(f"🧬 Tensor Bruto extraído: {df.shape[0]} jogos e {df.shape[1]} features originais.")
+            logger.info(f"🧬 Tensor Bruto extraído: {df.shape[0]} jogos processados.")
 
             df = self._calculate_standings_and_points(df)
 
             logger.info("📐 Calculando Diferenciais Numéricos (Deltas)...")
-            df = df.fillna(0)
+            df = df.fillna(0).infer_objects(copy=False)
 
             df['delta_elo'] = df['home_elo_before'] - df['away_elo_before']
             df['delta_wage_pct'] = df['home_wage_pct'] - df['away_wage_pct']
@@ -150,50 +168,85 @@ class QuantMLBuilder:
             df['delta_posicao'] = df['pos_tabela_away'] - df['pos_tabela_home']
             df['delta_market_respect'] = df['home_market_respect'] - df['away_market_respect']
             df['delta_tension'] = df['home_tension_index'] - df['away_tension_index']
+            df['delta_xg_micro'] = df['home_xg_for_ewma_micro'] - df['away_xg_for_ewma_micro']
+            df['delta_xg_macro'] = df['home_xg_for_ewma_macro'] - df['away_xg_for_ewma_macro']
 
-            logger.info("🎯 Gerando Variáveis Alvo (Targets)...")
+            logger.info("🎯 Gerando Variáveis Alvo (Targets) - Escondendo o Futuro...")
+            finished = df['status'] == 'FINISHED'
             
-            # Para Multi-classe (0 = Away, 1 = Draw, 2 = Home) - Formato exigido pelo XGBoost
-            def get_target(row):
-                if row['home_goals'] > row['away_goals']: return 2
-                elif row['home_goals'] < row['away_goals']: return 0
-                return 1
-            
-            df['target_match_result'] = df.apply(get_target, axis=1)
-            
-            # Secundários
+            df['target_match_result'] = np.where(finished, np.where(df['home_goals'] > df['away_goals'], 2, np.where(df['home_goals'] < df['away_goals'], 0, 1)), -1)
+            df['target_ht_result'] = np.where(finished, np.where(df['ht_home_goals'] > df['ht_away_goals'], 2, np.where(df['ht_home_goals'] < df['ht_away_goals'], 0, 1)), -1)
             df['total_goals'] = df['home_goals'] + df['away_goals']
-            df['target_over_25'] = (df['total_goals'] > 2.5).astype(int)
-            df['target_btts'] = ((df['home_goals'] > 0) & (df['away_goals'] > 0)).astype(int)
+            df['target_over_25'] = np.where(finished, (df['total_goals'] > 2.5).astype(int), -1)
+            df['target_btts'] = np.where(finished, ((df['home_goals'] > 0) & (df['away_goals'] > 0)).astype(int), -1)
+
+            df['target_total_corners'] = np.where(finished, df['home_corners'] + df['away_corners'], -1)
+            df['target_total_shots'] = np.where(finished, df['home_shots'] + df['away_shots'], -1)
+            df['target_total_cards'] = np.where(finished, df['home_yellow'] + df['away_yellow'] + (df['home_red'] * 2) + (df['away_red'] * 2), -1)
 
             bool_cols = [c for c in df.columns if 'fraudulent' in c]
             for col in bool_cols: df[col] = df[col].astype(int)
 
             logger.info(f"💾 Injetando Machine Learning Matrix ({df.shape[1]} colunas)...")
             
-            columns_to_save = list(df.columns)
-            records_to_insert = [tuple(x) for x in df.to_numpy()]
+            # Filtro para atualizar apenas dados dos últimos 7 dias e futuro
+            cutoff_date = pd.Timestamp(datetime.now().date() - timedelta(days=7))
+            df['match_date_pd'] = pd.to_datetime(df['match_date'])
+            df_to_save = df[df['match_date_pd'] >= cutoff_date].copy()
+            df_to_save.drop(columns=['match_date_pd', 'status', 'total_goals'], inplace=True, errors='ignore')
             
+            columns_to_save = list(df_to_save.columns)
+            
+            # 1. Cria a Tabela se não existir
             create_cols = []
             for col in columns_to_save:
-                if 'match_id' in col: create_cols.append(f"{col} VARCHAR(50) PRIMARY KEY") 
+                if col == 'match_id': create_cols.append(f"{col} INTEGER PRIMARY KEY")
                 elif 'date' in col: create_cols.append(f"{col} DATE")
-                elif 'sport_key' in col or 'season' in col: create_cols.append(f"{col} VARCHAR(50)")
-                elif 'target_' in col or 'pos_tabela' in col or 'rodada' in col or df[col].dtype in ['int32', 'int64', 'bool']: 
-                    create_cols.append(f"{col} SMALLINT")
-                else: 
-                    create_cols.append(f"{col} NUMERIC(8,4)")
+                elif 'sport_key' in col or 'season' in col or col == 'ht_result': create_cols.append(f"{col} VARCHAR(50)")
+                elif 'target_' in col or 'pos_tabela' in col or 'rodada' in col: create_cols.append(f"{col} SMALLINT")
+                else: create_cols.append(f"{col} NUMERIC(8,4)")
                     
-            create_stmt = f"CREATE TABLE quant_ml.feature_store ({', '.join(create_cols)});"
+            create_stmt = f"CREATE TABLE IF NOT EXISTS quant_ml.feature_store ({', '.join(create_cols)});"
             await conn.execute(create_stmt)
-            
-            await conn.copy_records_to_table(
-                'feature_store', schema_name='quant_ml',
-                records=records_to_insert, columns=columns_to_save
-            )
+
+            # 2. Formata os dados para UPSERT
+            records_to_upsert = []
+            for _, row in df_to_save.iterrows():
+                record = []
+                for col in columns_to_save:
+                    val = row[col]
+                    if col == 'match_id': record.append(int(val))
+                    elif 'date' in col:
+                        if isinstance(val, pd.Timestamp): record.append(val.date())
+                        elif isinstance(val, str): record.append(pd.to_datetime(val).date())
+                        else: record.append(val)
+                    elif 'sport_key' in col or 'season' in col or col == 'ht_result': record.append(str(val))
+                    elif 'target_' in col or 'pos_tabela' in col or 'rodada' in col: record.append(int(val))
+                    else: record.append(float(val))
+                records_to_upsert.append(tuple(record))
+
+            if records_to_upsert:
+                # Constroi a Query de UPSERT Dinâmica
+                cols_str = ", ".join(columns_to_save)
+                vals_str = ", ".join([f"${i+1}" for i in range(len(columns_to_save))])
+                updates_str = ", ".join([f"{c} = EXCLUDED.{c}" for c in columns_to_save if c != 'match_id'])
+                
+                upsert_query = f"""
+                    INSERT INTO quant_ml.feature_store ({cols_str}) 
+                    VALUES ({vals_str})
+                    ON CONFLICT (match_id) DO UPDATE SET {updates_str};
+                """
+                
+                try:
+                    await conn.executemany(upsert_query, records_to_upsert)
+                    logger.info(f"✅ UPSERT executado com sucesso em {len(records_to_upsert)} jogos ativos/futuros.")
+                except Exception as e:
+                    logger.error(f"❌ Falha no UPSERT da Feature Store: {e}")
+            else:
+                logger.info("ℹ️ Nenhuma nova feature precisou ser gravada hoje.")
 
         await db.disconnect()
-        logger.info("[DONE] A 'quant_ml.feature_store' está viva e pronta para o XGBoost.")
+        logger.info("[DONE] A 'quant_ml.feature_store' está atualizada e pronta para Inferência.")
 
 if __name__ == "__main__":
     builder = QuantMLBuilder()

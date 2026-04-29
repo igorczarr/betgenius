@@ -309,7 +309,7 @@ const currentAttributionList = computed(() => {
 const fetchDashboardData = async () => {
   try {
     // Altere a URL base conforme o seu ambiente (localhost ou domínio de prod)
-    const res = await axios.get('http://localhost:8000/api/v1/quant/dashboard');
+    const res = await axios.get('http://localhost:3000/api/v1/quant/dashboard');
     
     // Alimenta o estado do Vue com a resposta pura do Banco de Dados
     systemStats.value = res.data.systemStats;

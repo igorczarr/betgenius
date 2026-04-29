@@ -1,6 +1,75 @@
 <template>
-  <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start fade-in-up pb-10">
+  <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start fade-in-up pb-10 relative">
     
+    <transition name="modal-fade">
+      <div v-if="showMatchModal" class="fixed inset-0 z-[100] flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="closeMatchStats"></div>
+        
+        <div class="relative w-full max-w-2xl bg-gradient-to-br from-[#121927] to-[#0a0f16] border border-white/10 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col">
+          <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#10B981] to-transparent"></div>
+          
+          <div class="flex justify-between items-center p-4 border-b border-white/5 bg-black/20">
+            <div class="flex items-center gap-3">
+              <Activity class="text-[#10B981]" size="18" />
+              <h3 class="text-sm font-bold text-white uppercase tracking-widest font-mono">Terminal de Análise</h3>
+            </div>
+            <button @click="closeMatchStats" class="text-gray-500 hover:text-red-400 transition-colors bg-white/5 p-1.5 rounded-lg hover:bg-white/10">
+              <X size="16" />
+            </button>
+          </div>
+
+          <div class="p-6 flex flex-col gap-6 min-h-[300px]">
+            <div v-if="isLoadingModal" class="flex-1 flex flex-col items-center justify-center gap-4 py-10">
+              <div class="relative w-16 h-16 flex items-center justify-center">
+                <div class="absolute inset-0 rounded-full border-2 border-[#10B981]/20 border-t-[#10B981] animate-spin"></div>
+                <Database size="20" class="text-[#10B981] animate-pulse" />
+              </div>
+              <span class="text-[10px] text-gray-400 uppercase tracking-widest font-bold font-mono">Extraindo Tensores da Matrix...</span>
+            </div>
+
+            <div v-else-if="selectedMatchStats" class="flex flex-col gap-6 animate-fade-in">
+              <div class="flex justify-between items-center bg-black/40 p-4 rounded-xl border border-white/5">
+                <div class="flex flex-col items-center gap-1 w-1/3">
+                  <span class="text-lg font-bold text-white text-center">{{ selectedMatchStats.casa }}</span>
+                  <span class="text-[10px] text-gray-500 font-mono">xG: {{ selectedMatchStats.xgCasa }}</span>
+                </div>
+                <div class="flex flex-col items-center justify-center w-1/3">
+                  <span class="text-[10px] text-red-400 font-bold bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 mb-2 animate-pulse" v-if="selectedMatchStats.isLive">LIVE {{ selectedMatchStats.tempo }}'</span>
+                  <span class="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/10 mb-2" v-else>FT</span>
+                  <div class="text-3xl font-black text-white tracking-widest flex gap-2">
+                    <span>{{ selectedMatchStats.placarCasa }}</span>
+                    <span class="text-gray-600">-</span>
+                    <span>{{ selectedMatchStats.placarFora }}</span>
+                  </div>
+                </div>
+                <div class="flex flex-col items-center gap-1 w-1/3">
+                  <span class="text-lg font-bold text-white text-center">{{ selectedMatchStats.fora }}</span>
+                  <span class="text-[10px] text-gray-500 font-mono">xG: {{ selectedMatchStats.xgFora }}</span>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div v-for="(metric, idx) in selectedMatchStats.quantMetrics" :key="'qm'+idx" class="bg-[#121927] border border-white/5 p-3 rounded-lg flex flex-col gap-1 relative overflow-hidden group">
+                  <div class="absolute -right-4 -top-4 w-12 h-12 bg-blue-500/10 rounded-full blur-md group-hover:bg-blue-500/20 transition-all"></div>
+                  <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">{{ metric.nome }}</span>
+                  <div class="flex justify-between items-end mt-1">
+                    <div class="flex flex-col">
+                      <span class="text-[8px] text-gray-600 uppercase">Casa</span>
+                      <span class="text-xs font-mono font-bold text-white">{{ metric.casa }}{{ metric.sufixo }}</span>
+                    </div>
+                    <div class="flex flex-col text-right">
+                      <span class="text-[8px] text-gray-600 uppercase">Fora</span>
+                      <span class="text-xs font-mono font-bold text-white">{{ metric.fora }}{{ metric.sufixo }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <div class="col-span-1 xl:col-span-9 flex flex-col gap-5">
 
       <div class="glass-card p-5 px-6 flex flex-col lg:flex-row items-center justify-between gap-5 border-t-2 border-bet-primary shadow-[0_10px_30px_rgba(0,0,0,0.4)] bg-gradient-to-r from-[#121927] to-[#0f1523]">
@@ -45,36 +114,8 @@
             </select>
           </div>
 
-          <div class="hidden xl:flex items-center justify-center pl-4 border-l border-white/10">
-            <button class="flex flex-col items-center gap-1 group">
-              <div class="w-8 h-8 rounded-full bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center group-hover:bg-yellow-500 group-hover:text-black transition-all shadow-[0_0_10px_rgba(234,179,8,0.2)]">
-                <BellRing size="14" class="text-yellow-500 group-hover:text-black" />
-              </div>
-              <span class="text-[8px] text-gray-500 uppercase tracking-widest font-bold group-hover:text-yellow-500 transition-colors">Regras</span>
-            </button>
-          </div>
-
         </div>
       </div>
-
-      <transition name="slide-up">
-         <div v-if="surebetActive" class="bg-gradient-to-r from-[#10B981]/20 to-transparent border border-[#10B981]/30 p-3 rounded-lg flex items-center justify-between shadow-[0_0_15px_rgba(16,185,129,0.15)] relative overflow-hidden group">
-            <div class="absolute left-0 top-0 w-1 h-full bg-[#10B981] shadow-[0_0_10px_#10B981]"></div>
-            <div class="flex items-center gap-4 pl-3">
-               <div class="w-8 h-8 rounded-full bg-[#10B981]/10 flex items-center justify-center border border-[#10B981]/30">
-                 <RefreshCcw size="16" class="text-[#10B981] animate-spin-slow" />
-               </div>
-               <div class="flex flex-col">
-                  <span class="text-[11px] font-bold text-white uppercase tracking-widest flex items-center gap-2">Arbitragem Cross-Market Detectada <span class="bg-[#10B981] text-black px-1.5 py-0 rounded text-[8px] font-mono shadow-sm">Risco Zero</span></span>
-                  <span class="text-[10px] text-gray-300 mt-0.5 font-mono">Validação Automática do Ledger HFT</span>
-               </div>
-            </div>
-            <div class="flex items-center gap-4">
-               <span class="text-lg font-mono text-[#10B981] font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">EXEC</span>
-               <button @click="surebetActive = false" class="text-gray-500 hover:text-white transition-colors bg-black/40 p-1.5 rounded"><X size="14"/></button>
-            </div>
-         </div>
-      </transition>
 
       <draggable 
         v-model="blocosVerticais" 
@@ -113,59 +154,66 @@
                       <span class="col-span-2 text-right pr-2">Ação</span>
                     </div>
                     
-                    <div class="flex flex-col gap-1.5">
-                      <div v-if="(hftTab === 'match' ? hftData : propsAnomalyData).length === 0" class="text-center py-4 text-gray-500 text-xs uppercase tracking-widest font-mono">
-                        Aguardando dados da Matrix Quantitativa...
+                    <div class="flex flex-col gap-1.5 min-h-[150px]">
+                      
+                      <div v-if="(hftTab === 'match' ? hftData : propsAnomalyData).length === 0" class="flex flex-col items-center justify-center py-10 gap-3 opacity-60 h-full">
+                        <div class="relative w-12 h-12 flex items-center justify-center">
+                            <div class="absolute inset-0 rounded-full border-2 border-bet-primary/20 border-t-bet-primary animate-spin"></div>
+                            <Scan size="18" class="text-bet-primary" />
+                        </div>
+                        <span class="text-[9px] uppercase tracking-widest font-mono text-gray-400 font-bold">Monitorando o Mercado Global...</span>
                       </div>
 
-                      <div v-for="(item, i) in (hftTab === 'match' ? hftData : propsAnomalyData)" :key="'hft'+i" class="grid grid-cols-12 gap-2 items-center bg-[#121927] border border-white/5 hover:border-white/20 p-2 rounded-lg transition-colors group relative overflow-hidden h-14">
-                        <div class="absolute left-0 top-0 w-1 h-full opacity-50 group-hover:opacity-100 transition-opacity" :class="hftTab === 'match' ? 'bg-[#10B981]' : 'bg-[#a855f7]'"></div>
-                        
-                        <span class="col-span-1 text-center text-[10px] font-mono text-gray-400">{{ item.hora || 'Ao Vivo' }}</span>
-                        
-                        <div class="col-span-2 flex flex-col pl-2 border-l border-white/5">
-                          <div class="flex items-center gap-1.5 mb-0.5">
-                            <span class="text-xs font-bold text-white truncate" :title="item.jogo">{{ item.jogo }}</span>
-                          </div>
-                          <span class="text-[9px] uppercase tracking-wider mt-0.5 font-mono truncate" :class="hftTab === 'match' ? 'text-bet-primary' : 'text-[#a855f7]'">{{ item.mercado }}</span>
-                        </div>
-
-                        <div class="col-span-2 flex flex-col items-center justify-center bg-black/40 py-1 rounded border border-white/5 h-full">
-                          <div class="flex items-center gap-1 font-mono text-xs font-bold">
-                            <span class="text-gray-500 line-through text-[9px]">{{ item.pinOpen || '-' }}</span>
-                            <ArrowRight size="10" class="text-gray-600"/>
-                            <span :class="item.pinClose < item.pinOpen ? 'text-red-400' : 'text-green-400'">{{ item.pinClose || '-' }}</span>
-                          </div>
-                          <span class="text-[8px] text-gray-500 uppercase mt-0.5 tracking-widest">Fair: {{ item.trueOdd || '-' }}</span>
-                        </div>
-
-                        <div class="col-span-2 flex items-center justify-center h-full px-2">
-                           <svg viewBox="0 0 50 15" class="w-full h-4 overflow-visible">
-                             <polyline :points="item.sparkline || '0,10 50,10'" fill="none" :stroke="item.pinClose < item.pinOpen ? '#EF4444' : '#10B981'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
-                           </svg>
-                        </div>
-
-                        <div class="col-span-1 flex flex-col items-center justify-center">
-                          <span class="text-xs font-mono font-bold text-white bg-yellow-500/10 border border-yellow-500/30 px-2 py-0.5 rounded">{{ item.softOdd || '-' }}</span>
-                          <span class="text-[8px] text-yellow-500 uppercase mt-1 font-bold truncate max-w-full px-1">{{ item.bookie || 'Mercado' }}</span>
-                        </div>
-
-                        <div class="col-span-2 flex flex-col items-center justify-center border-l border-white/5 h-full pl-1">
-                          <div class="flex items-center gap-1.5">
-                            <span class="text-xs font-mono font-bold drop-shadow-[0_0_5px_currentColor]" :class="hftTab === 'match' ? 'text-[#10B981]' : 'text-[#a855f7]'">+{{ item.ev || '0.0' }}%</span>
-                            <div class="flex flex-col gap-0.5" title="Liquidez/Market Depth">
-                              <div class="w-4 h-1 bg-gray-700 rounded-sm overflow-hidden flex"><div class="h-full bg-white w-full"></div></div>
-                              <div class="w-4 h-1 bg-gray-700 rounded-sm overflow-hidden flex"><div class="h-full bg-white" :style="`width: ${item.depth || 100}%`"></div></div>
+                      <transition-group name="list" tag="div" class="flex flex-col gap-1.5">
+                        <div v-for="(item, i) in (hftTab === 'match' ? hftData : propsAnomalyData)" :key="'hft'+i" class="grid grid-cols-12 gap-2 items-center bg-[#121927] border border-white/5 hover:border-white/20 p-2 rounded-lg transition-colors group relative overflow-hidden h-14">
+                          <div class="absolute left-0 top-0 w-1 h-full opacity-50 group-hover:opacity-100 transition-opacity" :class="hftTab === 'match' ? 'bg-[#10B981]' : 'bg-[#a855f7]'"></div>
+                          
+                          <span class="col-span-1 text-center text-[10px] font-mono text-gray-400">{{ item.hora || 'Ao Vivo' }}</span>
+                          
+                          <div class="col-span-2 flex flex-col pl-2 border-l border-white/5">
+                            <div class="flex items-center gap-1.5 mb-0.5">
+                              <span class="text-xs font-bold text-white truncate" :title="item.jogo">{{ item.jogo }}</span>
                             </div>
+                            <span class="text-[9px] uppercase tracking-wider mt-0.5 font-mono truncate" :class="hftTab === 'match' ? 'text-bet-primary' : 'text-[#a855f7]'">{{ item.mercado }}</span>
                           </div>
-                          <span class="text-[8px] text-gray-400 uppercase mt-0.5 font-mono">Kelly: {{ item.kelly || '0.0' }}u</span>
-                        </div>
 
-                        <div class="col-span-2 flex justify-end items-center gap-2 pr-2 h-full">
-                          <button class="w-7 h-7 rounded bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all"><BarChart2 size="12"/></button>
-                          <button class="w-7 h-7 rounded border flex items-center justify-center transition-all shadow-lg hover:shadow-white" :class="hftTab === 'match' ? 'bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981] hover:bg-[#10B981] hover:text-black shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-[#a855f7]/10 border-[#a855f7]/30 text-[#a855f7] hover:bg-[#a855f7] hover:text-white shadow-[0_0_10px_rgba(168,85,247,0.2)]'"><Plus size="14" strokeWidth="3"/></button>
+                          <div class="col-span-2 flex flex-col items-center justify-center bg-black/40 py-1 rounded border border-white/5 h-full">
+                            <div class="flex items-center gap-1 font-mono text-xs font-bold">
+                              <span class="text-gray-500 line-through text-[9px]">{{ item.pinOpen || '-' }}</span>
+                              <ArrowRight size="10" class="text-gray-600"/>
+                              <span :class="item.pinClose < item.pinOpen ? 'text-red-400' : 'text-green-400'">{{ item.pinClose || '-' }}</span>
+                            </div>
+                            <span class="text-[8px] text-gray-500 uppercase mt-0.5 tracking-widest">Fair: {{ item.trueOdd || '-' }}</span>
+                          </div>
+
+                          <div class="col-span-2 flex items-center justify-center h-full px-2">
+                             <svg viewBox="0 0 50 15" class="w-full h-4 overflow-visible">
+                               <polyline :points="item.sparkline || '0,10 50,10'" fill="none" :stroke="item.pinClose < item.pinOpen ? '#EF4444' : '#10B981'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+                             </svg>
+                          </div>
+
+                          <div class="col-span-1 flex flex-col items-center justify-center">
+                            <span class="text-xs font-mono font-bold text-white bg-yellow-500/10 border border-yellow-500/30 px-2 py-0.5 rounded">{{ item.softOdd || '-' }}</span>
+                            <span class="text-[8px] text-yellow-500 uppercase mt-1 font-bold truncate max-w-full px-1">{{ item.bookie || 'Mercado' }}</span>
+                          </div>
+
+                          <div class="col-span-2 flex flex-col items-center justify-center border-l border-white/5 h-full pl-1">
+                            <div class="flex items-center gap-1.5">
+                              <span class="text-xs font-mono font-bold drop-shadow-[0_0_5px_currentColor]" :class="hftTab === 'match' ? 'text-[#10B981]' : 'text-[#a855f7]'">+{{ item.ev || '0.0' }}%</span>
+                              <div class="flex flex-col gap-0.5" title="Liquidez/Market Depth">
+                                <div class="w-4 h-1 bg-gray-700 rounded-sm overflow-hidden flex"><div class="h-full bg-white w-full"></div></div>
+                                <div class="w-4 h-1 bg-gray-700 rounded-sm overflow-hidden flex"><div class="h-full bg-white" :style="`width: ${item.depth || 100}%`"></div></div>
+                              </div>
+                            </div>
+                            <span class="text-[8px] text-gray-400 uppercase mt-0.5 font-mono">Kelly: {{ item.kelly || '0.0' }}u</span>
+                          </div>
+
+                          <div class="col-span-2 flex justify-end items-center gap-2 pr-2 h-full">
+                            <button class="w-7 h-7 rounded bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all"><BarChart2 size="12"/></button>
+                            <button class="w-7 h-7 rounded border flex items-center justify-center transition-all shadow-lg hover:shadow-white" :class="hftTab === 'match' ? 'bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981] hover:bg-[#10B981] hover:text-black shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-[#a855f7]/10 border-[#a855f7]/30 text-[#a855f7] hover:bg-[#a855f7] hover:text-white shadow-[0_0_10px_rgba(168,85,247,0.2)]'"><Plus size="14" strokeWidth="3"/></button>
+                          </div>
                         </div>
-                      </div>
+                      </transition-group>
                     </div>
                   </div>
                 </div>
@@ -190,64 +238,80 @@
                     <WidgetCard v-if="subElement.id === 'asian_scanner'" titulo="Live Asian Pressure Scanner" class="w-full flex-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)] border-t-2 border-blue-500">
                       <template #icone><Activity :size="16" color="#3b82f6" /></template>
                       <div class="flex flex-col gap-3 mt-2 h-full">
-                        <div v-if="livePressureData.length === 0" class="text-center py-4 text-gray-500 text-[9px] uppercase font-mono">Buscando Pressão Asiática...</div>
                         
-                        <div v-for="(live, i) in livePressureData" :key="'lp'+i" class="bg-black/20 border border-white/5 p-3 rounded-xl relative overflow-hidden group hover:border-blue-500/30 transition-colors">
-                          <div class="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-blue-500/10 to-transparent pointer-events-none"></div>
-                          
-                          <div class="flex justify-between items-center mb-2">
-                            <span class="text-xs font-bold text-white truncate pr-2">{{ live.jogo }}</span>
-                            <span class="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-mono font-bold animate-pulse border border-red-500/20 shrink-0">{{ live.tempo }}'</span>
-                          </div>
-                          
-                          <div class="flex flex-col gap-1 mb-3">
-                            <div class="flex justify-between items-end text-[9px] uppercase font-bold tracking-widest text-gray-500">
-                              <span :class="live.pressaoCasa > live.pressaoFora ? 'text-blue-400' : ''">Casa APM: {{ live.apmCasa }}</span>
-                              <span :class="live.pressaoFora > live.pressaoCasa ? 'text-blue-400' : ''">Fora APM: {{ live.apmFora }}</span>
+                        <div v-if="livePressureData.length === 0" class="flex flex-col items-center justify-center py-6 gap-3 opacity-60">
+                           <div class="relative w-8 h-8 flex items-center justify-center">
+                              <div class="absolute inset-0 rounded-full border-2 border-blue-500/20 border-t-blue-500 animate-spin"></div>
+                           </div>
+                           <span class="text-[9px] uppercase tracking-widest font-mono text-gray-400 font-bold">Aguardando In-Play...</span>
+                        </div>
+                        
+                        <transition-group name="list" tag="div" class="flex flex-col gap-3">
+                          <div v-for="(live, i) in livePressureData" :key="'lp'+i" class="bg-black/20 border border-white/5 p-3 rounded-xl relative overflow-hidden group hover:border-blue-500/30 transition-colors">
+                            <div class="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-blue-500/10 to-transparent pointer-events-none"></div>
+                            
+                            <div class="flex justify-between items-center mb-2">
+                              <span class="text-xs font-bold text-white truncate pr-2">{{ live.jogo }}</span>
+                              <span class="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-mono font-bold animate-pulse border border-red-500/20 shrink-0">{{ live.tempo }}'</span>
                             </div>
-                            <div class="w-full h-1.5 bg-gray-800 rounded flex overflow-hidden shadow-inner">
-                              <div class="h-full bg-blue-500 transition-all" :style="`width: ${(live.pressaoCasa / ((live.pressaoCasa + live.pressaoFora) || 1)) * 100}%`"></div>
-                              <div class="h-full bg-white/20 w-0.5"></div>
-                              <div class="h-full bg-gray-500 transition-all" :style="`width: ${(live.pressaoFora / ((live.pressaoCasa + live.pressaoFora) || 1)) * 100}%`"></div>
-                            </div>
-                          </div>
-
-                          <div class="flex justify-between items-center bg-[#121927] p-2 rounded border border-white/5">
-                            <div class="flex flex-col">
-                              <span class="text-[8px] text-gray-500 uppercase tracking-widest font-bold">Asian Line Drop</span>
-                              <div class="flex items-center gap-1 font-mono text-xs font-bold text-white">
-                                <span>{{ live.linhaAntiga }}</span> <ArrowDownRight size="12" class="text-red-400"/> <span class="text-red-400">{{ live.linhaAtual }}</span>
+                            
+                            <div class="flex flex-col gap-1 mb-3">
+                              <div class="flex justify-between items-end text-[9px] uppercase font-bold tracking-widest text-gray-500">
+                                <span :class="live.pressaoCasa > live.pressaoFora ? 'text-blue-400' : ''">Casa APM: {{ live.apmCasa }}</span>
+                                <span :class="live.pressaoFora > live.pressaoCasa ? 'text-blue-400' : ''">Fora APM: {{ live.apmFora }}</span>
+                              </div>
+                              <div class="w-full h-1.5 bg-gray-800 rounded flex overflow-hidden shadow-inner">
+                                <div class="h-full bg-blue-500 transition-all" :style="`width: ${(live.pressaoCasa / ((live.pressaoCasa + live.pressaoFora) || 1)) * 100}%`"></div>
+                                <div class="h-full bg-white/20 w-0.5"></div>
+                                <div class="h-full bg-gray-500 transition-all" :style="`width: ${(live.pressaoFora / ((live.pressaoCasa + live.pressaoFora) || 1)) * 100}%`"></div>
                               </div>
                             </div>
-                            <button class="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded text-[9px] font-bold uppercase hover:bg-blue-500 hover:text-white transition-colors">Analisar</button>
+
+                            <div class="flex justify-between items-center bg-[#121927] p-2 rounded border border-white/5">
+                              <div class="flex flex-col">
+                                <span class="text-[8px] text-gray-500 uppercase tracking-widest font-bold">Asian Line Drop</span>
+                                <div class="flex items-center gap-1 font-mono text-xs font-bold text-white">
+                                  <span>{{ live.linhaAntiga }}</span> <ArrowDownRight size="12" class="text-red-400"/> <span class="text-red-400">{{ live.linhaAtual }}</span>
+                                </div>
+                              </div>
+                              <button class="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded text-[9px] font-bold uppercase hover:bg-blue-500 hover:text-white transition-colors">Analisar</button>
+                            </div>
                           </div>
-                        </div>
+                        </transition-group>
                       </div>
                     </WidgetCard>
 
                     <WidgetCard v-else-if="subElement.id === 'smart_steamers'" titulo="Smart Money Steamers" class="w-full flex-1 shadow-[0_10px_30px_rgba(0,0,0,0.3)] border-t-2 border-yellow-500">
                       <template #icone><Flame :size="16" color="#F59E0B" /></template>
                       <div class="flex flex-col gap-3 mt-2 h-full">
-                        <div v-if="steamersData.length === 0" class="text-center py-4 text-gray-500 text-[9px] uppercase font-mono">Monitorando Volume Sharp...</div>
-
-                        <div v-for="(steamer, i) in steamersData" :key="'st'+i" class="bg-black/20 border border-white/5 p-3 rounded-xl relative overflow-hidden group hover:border-yellow-500/30 transition-colors">
-                          <div class="absolute left-0 top-0 h-full w-1" :class="steamer.urgencia === 'high' ? 'bg-red-500' : 'bg-yellow-500'"></div>
-                          <div class="flex justify-between items-start mb-2 pl-2">
-                            <div class="flex flex-col">
-                              <span class="text-[9px] text-gray-500 uppercase font-mono tracking-widest">{{ steamer.tempo }}</span>
-                              <span class="text-xs font-bold text-white">{{ steamer.jogo }}</span>
-                            </div>
-                            <span class="text-[10px] font-mono font-bold text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20 shadow-inner shrink-0">Vol: {{ steamer.volume }}</span>
-                          </div>
-                          <div class="flex items-center gap-2 pl-2 mt-2 border-t border-white/5 pt-2">
-                            <Zap :size="12" :class="steamer.urgencia === 'high' ? 'text-red-400' : 'text-yellow-500'" class="animate-pulse shrink-0" />
-                            <span class="text-[10px] text-gray-300 font-mono truncate">Spike no mercado: <strong class="text-white">{{ steamer.mercado }}</strong></span>
-                          </div>
-                          <div class="mt-2 pl-2 flex justify-between items-center text-[10px] font-mono">
-                            <span class="text-gray-500">Odd de Entrada:</span>
-                            <span class="font-bold text-white bg-black/60 px-2 py-1 rounded border border-gray-700 shadow-inner">{{ steamer.odd }}</span>
-                          </div>
+                        
+                        <div v-if="steamersData.length === 0" class="flex flex-col items-center justify-center py-6 gap-3 opacity-60">
+                           <div class="relative w-8 h-8 flex items-center justify-center">
+                              <div class="absolute inset-0 rounded-full border-2 border-yellow-500/20 border-t-yellow-500 animate-spin"></div>
+                           </div>
+                           <span class="text-[9px] uppercase tracking-widest font-mono text-gray-400 font-bold">Buscando Sharp Drops...</span>
                         </div>
+
+                        <transition-group name="list" tag="div" class="flex flex-col gap-3">
+                          <div v-for="(steamer, i) in steamersData" :key="'st'+i" class="bg-black/20 border border-white/5 p-3 rounded-xl relative overflow-hidden group hover:border-yellow-500/30 transition-colors">
+                            <div class="absolute left-0 top-0 h-full w-1" :class="steamer.urgencia === 'high' ? 'bg-red-500' : 'bg-yellow-500'"></div>
+                            <div class="flex justify-between items-start mb-2 pl-2">
+                              <div class="flex flex-col">
+                                <span class="text-[9px] text-gray-500 uppercase font-mono tracking-widest">{{ steamer.tempo || 'Recente' }}</span>
+                                <span class="text-xs font-bold text-white">{{ steamer.jogo }}</span>
+                              </div>
+                              <span class="text-[10px] font-mono font-bold text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20 shadow-inner shrink-0">Vol: {{ steamer.drop }}%</span>
+                            </div>
+                            <div class="flex items-center gap-2 pl-2 mt-2 border-t border-white/5 pt-2">
+                              <Zap :size="12" :class="steamer.urgencia === 'high' ? 'text-red-400' : 'text-yellow-500'" class="animate-pulse shrink-0" />
+                              <span class="text-[10px] text-gray-300 font-mono truncate">Spike no mercado: <strong class="text-white">{{ steamer.mercado }}</strong></span>
+                            </div>
+                            <div class="mt-2 pl-2 flex justify-between items-center text-[10px] font-mono">
+                              <span class="text-gray-500">Odd Entrada:</span>
+                              <span class="font-bold text-white bg-black/60 px-2 py-1 rounded border border-gray-700 shadow-inner">{{ steamer.oddNova }}</span>
+                            </div>
+                          </div>
+                        </transition-group>
                       </div>
                     </WidgetCard>
                   </div>
@@ -258,31 +322,33 @@
             <template v-else-if="element.id === 'ai_picks'">
               <WidgetCard titulo="S-Tier Ticket Builder (AI Portfólio)" class="w-full shadow-[0_15px_40px_rgba(0,0,0,0.3)] border-t-2 border-[#10B981]">
                 <template #icone><Target :size="16" color="#10B981" /></template>
-                <template #acoes>
-                   <button @click="triggerTicketBuilder" :disabled="isBuilding" class="bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/50 px-3 py-1 rounded text-[9px] font-bold uppercase tracking-widest hover:bg-[#10B981] hover:text-black transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                      <RefreshCcw v-if="isBuilding" size="10" class="animate-spin-slow" />
-                      {{ isBuilding ? 'Processando Oráculo...' : 'Gerar Bilhetes' }}
-                   </button>
-                </template>
                 <div class="flex flex-col gap-3 mt-2">
-                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  
+                  <div v-if="goldPicksData.length === 0" class="flex flex-col items-center justify-center py-6 gap-3 opacity-60">
+                     <div class="relative w-8 h-8 flex items-center justify-center">
+                        <div class="absolute inset-0 rounded-full border-2 border-[#10B981]/20 border-t-[#10B981] animate-spin"></div>
+                     </div>
+                     <span class="text-[9px] uppercase tracking-widest font-mono text-gray-400 font-bold">Extraindo Oportunidades +EV...</span>
+                  </div>
+
+                  <transition-group name="list" tag="div" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div v-for="(pick, i) in goldPicksData" :key="'gp'+i" class="bg-gradient-to-br from-[#121927] to-black border border-white/10 p-4 rounded-xl relative overflow-hidden group hover:border-[#10B981]/30 transition-colors shadow-lg">
                       <div class="absolute -right-10 -top-10 w-24 h-24 bg-[#10B981]/10 rounded-full blur-2xl pointer-events-none group-hover:bg-[#10B981]/20 transition-colors"></div>
                       <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold block mb-1">{{ pick.liga }}</span>
-                      <span class="text-sm font-bold text-white truncate block mb-3 drop-shadow-sm">{{ pick.jogo }}</span>
+                      <span class="text-sm font-bold text-white truncate block mb-3 drop-shadow-sm">{{ pick.home_team }} v {{ pick.away_team }}</span>
                       <div class="flex justify-between items-center mb-3 bg-black/40 p-2.5 rounded border border-white/5 shadow-inner">
                         <div class="flex flex-col w-3/4">
                           <span class="text-[9px] text-gray-500 uppercase tracking-widest">Covariância SGP</span>
-                          <span class="text-[10px] font-mono font-bold text-[#10B981] truncate block" :title="pick.aposta">{{ pick.aposta }}</span>
+                          <span class="text-[10px] font-mono font-bold text-[#10B981] truncate block" :title="pick.mercado">{{ pick.mercado }}</span>
                         </div>
                         <span class="text-sm font-mono font-bold text-white bg-[#121927] px-2 py-0.5 rounded border border-gray-700">{{ pick.odd }}</span>
                       </div>
                       <div class="flex justify-between items-center border-t border-white/5 pt-3 mt-1">
-                        <span class="text-[9px] text-gray-400 font-mono flex items-center gap-1 truncate pr-2"><BarChart2 size="10" class="text-blue-400 shrink-0"/> <span class="truncate">{{ pick.zscore }}</span></span>
+                        <span class="text-[9px] text-gray-400 font-mono flex items-center gap-1 truncate pr-2"><BarChart2 size="10" class="text-blue-400 shrink-0"/> <span class="truncate">Confiança: {{ pick.confianca }}%</span></span>
                         <span class="text-[9px] text-[#10B981] font-bold uppercase bg-[#10B981]/10 px-1.5 py-0.5 rounded border border-[#10B981]/30 shadow-sm shrink-0">+{{ pick.ev }} EV</span>
                       </div>
                     </div>
-                  </div>
+                  </transition-group>
                 </div>
               </WidgetCard>
             </template>
@@ -304,30 +370,71 @@
          <span class="text-[10px] text-gray-400 uppercase tracking-widest">Macro Market Movers</span>
       </div>
 
-      <div class="glass-card flex-1 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col p-4 gap-5 custom-scrollbar overflow-y-auto border border-white/5 rounded-xl">
+      <div class="glass-card flex-1 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col p-4 gap-5 custom-scrollbar overflow-y-auto border border-white/5 rounded-xl relative">
         
         <div class="flex flex-col gap-3">
           <div class="flex items-center justify-between border-b border-white/10 pb-2">
-            <span class="text-[10px] text-gray-400 uppercase tracking-widest font-bold flex items-center gap-1.5"><TrendingDown size="12" class="text-red-400"/> Top Drops (1h)</span>
+            <div class="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 shadow-inner">
+              <button @click="topDropsTab = 'drops'" :class="{'bg-red-500/20 text-red-400 border-red-500/30': topDropsTab === 'drops', 'text-gray-500 border-transparent': topDropsTab !== 'drops'}" class="px-2 py-1 text-[9px] uppercase tracking-wider font-bold rounded border transition-all flex items-center gap-1">
+                <TrendingDown size="10"/> Top Drops
+              </button>
+              <button @click="topDropsTab = 'feed'" :class="{'bg-blue-500/20 text-blue-400 border-blue-500/30': topDropsTab === 'feed', 'text-gray-500 border-transparent': topDropsTab !== 'feed'}" class="px-2 py-1 text-[9px] uppercase tracking-wider font-bold rounded border transition-all flex items-center gap-1">
+                <Clock size="10"/> Resultados
+              </button>
+            </div>
             <span class="text-[8px] bg-white/5 text-gray-500 px-1.5 py-0.5 rounded font-mono">Global</span>
           </div>
           
-          <div class="flex flex-col gap-2">
-            <div v-if="topDrops.length === 0" class="text-center py-2 text-gray-600 text-[8px] uppercase">Aguardando dados...</div>
-            <div v-for="(drop, i) in topDrops" :key="'td'+i" class="bg-black/30 border border-white/5 p-2.5 rounded-lg hover:bg-white/5 transition-colors group cursor-pointer">
-              <div class="flex justify-between items-start mb-1.5">
-                <span class="text-[11px] font-bold text-white group-hover:text-bet-primary transition-colors">{{ drop.jogo }}</span>
-                <span class="text-[9px] font-mono text-gray-500">{{ drop.liga }}</span>
-              </div>
-              <div class="flex justify-between items-center bg-[#121927] p-1.5 rounded border border-white/5 shadow-inner">
-                <span class="text-[9px] text-gray-400 font-bold uppercase">{{ drop.mercado }}</span>
-                <div class="flex items-center gap-1 font-mono text-[10px] font-bold">
-                  <span class="text-gray-500 line-through">{{ drop.old }}</span>
-                  <ArrowRight size="10" class="text-gray-600"/>
-                  <span class="text-red-400">{{ drop.new }}</span>
+          <div v-if="topDropsTab === 'drops'" class="flex flex-col gap-2 min-h-[150px]">
+            <div v-if="topDrops.length === 0" class="flex flex-col items-center justify-center py-6 gap-3 opacity-60 h-full">
+               <div class="relative w-8 h-8 flex items-center justify-center">
+                  <div class="absolute inset-0 rounded-full border-2 border-red-400/30 border-t-red-400 animate-spin"></div>
+               </div>
+               <span class="text-[9px] uppercase tracking-widest font-mono text-gray-400 font-bold text-center">Buscando anomalias...</span>
+            </div>
+            
+            <transition-group name="list" tag="div" class="flex flex-col gap-2">
+              <div v-for="(drop, i) in topDrops" :key="'td'+i" class="bg-black/30 border border-white/5 p-2.5 rounded-lg hover:bg-white/5 transition-colors group cursor-pointer">
+                <div class="flex justify-between items-start mb-1.5">
+                  <span class="text-[11px] font-bold text-white group-hover:text-red-400 transition-colors">{{ drop.jogo }}</span>
+                  <span class="text-[9px] font-mono text-gray-500">{{ drop.liga }}</span>
+                </div>
+                <div class="flex justify-between items-center bg-[#121927] p-1.5 rounded border border-white/5 shadow-inner">
+                  <span class="text-[9px] text-gray-400 font-bold uppercase truncate max-w-[50%]">{{ drop.mercado }}</span>
+                  <div class="flex items-center gap-1 font-mono text-[10px] font-bold">
+                    <span class="text-gray-500 line-through">{{ drop.old }}</span>
+                    <ArrowRight size="10" class="text-gray-600"/>
+                    <span class="text-red-400">{{ drop.new }}</span>
+                  </div>
                 </div>
               </div>
+            </transition-group>
+          </div>
+
+          <div v-else class="flex flex-col gap-2 min-h-[150px]">
+             <div v-if="recentMatches.length === 0" class="flex flex-col items-center justify-center py-6 gap-3 opacity-60 h-full">
+               <div class="relative w-8 h-8 flex items-center justify-center">
+                  <div class="absolute inset-0 rounded-full border-2 border-blue-400/30 border-t-blue-400 animate-spin"></div>
+               </div>
+               <span class="text-[9px] uppercase tracking-widest font-mono text-gray-400 font-bold text-center">Sincronizando Liga...</span>
             </div>
+
+            <transition-group name="list" tag="div" class="flex flex-col gap-2">
+              <div v-for="match in recentMatches" :key="'rm'+match.id" @click="openMatchStats(match.id)" class="cursor-pointer bg-black/30 border border-white/5 p-2.5 rounded-lg hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group">
+                 <div class="flex justify-between items-center text-[9px] text-gray-500 font-mono mb-2 border-b border-white/5 pb-1">
+                    <span class="uppercase tracking-widest truncate pr-2">{{ match.campeonato }}</span>
+                    <span :class="match.status === 'IN_PROGRESS' ? 'text-red-400 animate-pulse bg-red-500/10 px-1 rounded' : 'text-blue-400 bg-blue-500/10 px-1 rounded'">{{ match.status === 'FINISHED' ? 'FT' : 'LIVE' }}</span>
+                 </div>
+                 <div class="flex justify-between items-center text-[11px] font-bold text-white mb-1 group-hover:text-blue-200 transition-colors">
+                    <span class="truncate pr-2">{{ match.casa }}</span>
+                    <span class="text-blue-400 font-mono bg-blue-500/10 px-1.5 rounded">{{ match.home_goals ?? '-' }}</span>
+                 </div>
+                 <div class="flex justify-between items-center text-[11px] font-bold text-white group-hover:text-blue-200 transition-colors">
+                    <span class="truncate pr-2">{{ match.fora }}</span>
+                    <span class="text-blue-400 font-mono bg-blue-500/10 px-1.5 rounded">{{ match.away_goals ?? '-' }}</span>
+                 </div>
+              </div>
+            </transition-group>
           </div>
         </div>
 
@@ -336,20 +443,25 @@
             <span class="text-[10px] text-gray-400 uppercase tracking-widest font-bold flex items-center gap-1.5"><Database size="12" class="text-blue-400"/> Liquidity Spikes</span>
           </div>
           
-          <div class="flex flex-col gap-2">
-            <div v-if="volumeSpikes.length === 0" class="text-center py-2 text-gray-600 text-[8px] uppercase">Aguardando dados...</div>
-            <div v-for="(spike, i) in volumeSpikes" :key="'vs'+i" class="bg-black/30 border border-white/5 p-2.5 rounded-lg flex flex-col gap-2">
-              <div class="flex justify-between items-center">
-                <span class="text-[11px] font-bold text-white">{{ spike.jogo }}</span>
-                <span class="text-[9px] text-blue-400 font-bold uppercase bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">{{ spike.mercado }}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden flex">
-                  <div class="h-full bg-blue-500 animate-pulse" :style="`width: ${spike.percent}%`"></div>
-                </div>
-                <span class="text-[9px] font-mono font-bold text-white w-12 text-right">{{ spike.vol }}</span>
-              </div>
+          <div class="flex flex-col gap-2 min-h-[100px]">
+            <div v-if="volumeSpikes.length === 0" class="flex flex-col items-center justify-center py-4 gap-3 opacity-60">
+               <span class="text-[9px] uppercase tracking-widest font-mono text-gray-400 font-bold">Sem spikes recentes.</span>
             </div>
+            
+            <transition-group name="list" tag="div" class="flex flex-col gap-2">
+              <div v-for="(spike, i) in volumeSpikes" :key="'vs'+i" class="bg-black/30 border border-white/5 p-2.5 rounded-lg flex flex-col gap-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-[11px] font-bold text-white">{{ spike.jogo }}</span>
+                  <span class="text-[9px] text-blue-400 font-bold uppercase bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">{{ spike.mercado }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden flex">
+                    <div class="h-full bg-blue-500 animate-pulse" :style="`width: ${spike.percent}%`"></div>
+                  </div>
+                  <span class="text-[9px] font-mono font-bold text-white w-12 text-right">{{ spike.vol }}</span>
+                </div>
+              </div>
+            </transition-group>
           </div>
         </div>
 
@@ -360,8 +472,10 @@
             <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Bot Execution Log</span>
           </div>
           <div class="flex flex-col gap-1 font-mono text-[8px] text-gray-400 leading-tight h-16 overflow-hidden relative">
-            <span v-for="(log, i) in botLogs" :key="'log'+i" class="truncate" :class="{'text-[#10B981]': log.includes('OK') || log.includes('ALPHA') || log.includes('TICKET'), 'text-yellow-500': log.includes('SCAN')}">> {{ log }}</span>
-            <div class="absolute bottom-0 w-full h-8 bg-gradient-to-t from-black/60 to-transparent"></div>
+            <transition-group name="list">
+              <span v-for="(log, i) in botLogs" :key="'log'+i" class="truncate" :class="{'text-[#10B981]': log.includes('OK') || log.includes('ALPHA') || log.includes('TICKET'), 'text-yellow-500': log.includes('SCAN')}">> {{ log }}</span>
+            </transition-group>
+            <div class="absolute bottom-0 w-full h-8 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
           </div>
           <div class="flex justify-between items-center border-t border-gray-800 pt-2 mt-1">
             <div class="flex items-center gap-1.5">
@@ -386,13 +500,13 @@ import {
   GripVertical, GripHorizontal, Radio, SlidersHorizontal, 
   Target, Clock, Globe, RefreshCcw, X, Activity, LineChart, 
   ArrowRight, ArrowDownRight, Plus, BarChart2, Zap, Flame, User, BellRing,
-  TrendingDown, Database, Terminal, Wifi
+  TrendingDown, Database, Terminal, Wifi, Scan
 } from 'lucide-vue-next';
 import axios from 'axios';
 import WidgetCard from './WidgetCard.vue';
 
 // ==================================================
-// FIX S-TIER: ROTAS E PORTAS CORRIGIDAS (PORTA 8000)
+// CONFIGS DE API (PORTA 8000 HFT)
 // ==================================================
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8000';
@@ -403,7 +517,13 @@ const filtroEV = ref(3.0);
 const filtroTempo = ref('12h');
 const surebetActive = ref(false); 
 const hftTab = ref('match');
+const topDropsTab = ref('drops'); // NOVO: Controle da Aba (Drops vs Feed)
 const isBuilding = ref(false);
+
+// ESTADO DO MODAL DE JOGO
+const showMatchModal = ref(false);
+const isLoadingModal = ref(false);
+const selectedMatchStats = ref(null);
 
 const blocosVerticais = ref([
   { id: 'hft_matrix', type: 'single' }, 
@@ -416,7 +536,7 @@ const widgetsMenores = ref([
   { id: 'smart_steamers' } 
 ]);
 
-// ARRAYS VAZIOS (AGUARDANDO O BANCO DE DADOS)
+// ARRAYS REATIVOS DE DADOS
 const hftData = ref([]);
 const propsAnomalyData = ref([]);
 const livePressureData = ref([]);
@@ -424,90 +544,114 @@ const steamersData = ref([]);
 const goldPicksData = ref([]);
 const topDrops = ref([]);
 const volumeSpikes = ref([]);
+const recentMatches = ref([]); // NOVO: Guarda a lista de jogos recentes (Feed)
+
 const botLogs = ref([
   "> SYS: Conectando ao Banco de Dados Principal...",
   "> SCAN: Inicializando varredura HFT..."
 ]);
 
 // ==================================================
-// MÉTODOS DE BUSCA (PERSISTÊNCIA REAL)
+// MÉTODOS DE BUSCA E INTEGRAÇÃO (REST API)
 // ==================================================
 const fetchRadarData = async () => {
   try {
     const token = localStorage.getItem('betgenius_token');
     const opts = { headers: { Authorization: `Bearer ${token}` } };
 
-    // Dispara a busca real nos endpoints (que vamos criar/ajustar no quantController depois)
-    // Opcionalmente, essas rotas não existem ainda, então fazemos um try/catch silencioso
-    const [dropsRes, spikesRes] = await Promise.all([
+    // Busca simultânea S-Tier nas rotas Reais da Porta 8000
+    const [dropsRes, spikesRes, steamersRes, picksRes, matchesRes] = await Promise.all([
       axios.get(`${API_BASE_URL}/api/v1/quant/top-drops`, opts).catch(() => ({ data: [] })),
-      axios.get(`${API_BASE_URL}/api/v1/quant/volume-spikes`, opts).catch(() => ({ data: [] }))
+      axios.get(`${API_BASE_URL}/api/v1/quant/volume-spikes`, opts).catch(() => ({ data: [] })),
+      axios.get(`${API_BASE_URL}/api/v1/quant/steamers`, opts).catch(() => ({ data: [] })),
+      axios.get(`${API_BASE_URL}/api/v1/quant/gold-picks`, opts).catch(() => ({ data: [] })),
+      axios.get(`${API_BASE_URL}/api/v1/matches/today`, opts).catch(() => ({ data: [] }))
     ]);
 
     if (dropsRes.data.length > 0) topDrops.value = dropsRes.data;
     if (spikesRes.data.length > 0) volumeSpikes.value = spikesRes.data;
+    if (steamersRes.data.length > 0) steamersData.value = steamersRes.data;
+    if (picksRes.data.length > 0) goldPicksData.value = picksRes.data;
+    
+    // Filtra o Feed de Notícias apenas para jogos Finalizados ou Ao Vivo
+    if (matchesRes.data.length > 0) {
+       recentMatches.value = matchesRes.data.filter(m => m.status === 'FINISHED' || m.status === 'IN_PROGRESS').reverse().slice(0, 15);
+    }
 
     botLogs.value.unshift("> OK: Dados da Matrix Sincronizados.");
     if (botLogs.value.length > 8) botLogs.value.pop();
   } catch (error) {
-    botLogs.value.unshift("> ERR: Falha ao ler DB. Usando cache local.");
+    botLogs.value.unshift("> ERR: Falha ao ler DB. Verifique o servidor Python.");
   }
-};
-
-const getTeamLogo = (teamName) => {
-  if (!teamName) return '';
-  const safeName = encodeURIComponent(teamName.trim());
-  return `${API_BASE_URL}/api/v1/teams/shield/${safeName}`; // Ajustado para /api/v1/
-};
-
-const handleImageError = (e) => {
-  e.target.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; 
 };
 
 const triggerTicketBuilder = async () => {
   isBuilding.value = true;
-  botLogs.value.unshift("> SCAN: Executando Motor SGP / Python...");
+  botLogs.value.unshift("> SCAN: Extraindo Oportunidades +EV...");
   if (botLogs.value.length > 8) botLogs.value.pop();
 
   try {
     const token = localStorage.getItem('betgenius_token');
-    const payload = { match_id: 1, target_odd: 2.50, risk_profile: 'moderado' };
-
-    const response = await axios.post(`${API_BASE_URL}/api/v1/quant/build-ticket`, payload, {
+    // Bate na nova rota real para preencher a listagem no card da IA
+    const res = await axios.get(`${API_BASE_URL}/api/v1/quant/gold-picks`, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    const data = response.data;
-
-    if (data && data.recommended_tickets) {
-      botLogs.value.unshift(`> TICKET: Forjamento concluído com sucesso.`);
-      goldPicksData.value = data.recommended_tickets.map(ticket => {
-        return {
-          liga: ticket.profile.toUpperCase(), jogo: ticket.blueprint, aposta: ticket.legs.map(l => l.market).join(' + '),
-          odd: ticket.target_odd, zscore: ticket.ev_rationale || "Validação Quantitativa", ev: "EV+"
-        };
-      });
+    if (res.data && res.data.length > 0) {
+      goldPicksData.value = res.data;
+      botLogs.value.unshift(`> TICKET: Extrator localizou ${res.data.length} alvos.`);
     } else {
        botLogs.value.unshift(`> TICKET: Nenhum valor retornado do Oráculo.`);
     }
   } catch (error) {
-    botLogs.value.unshift("> ERR: Rota do Ticket Builder indisponível no Node.");
+    botLogs.value.unshift("> ERR: Rota Gold Picks indisponível.");
   } finally {
     isBuilding.value = false;
   }
 };
 
+// ==================================================
+// LÓGICA DO MODAL POPUP (MATCH CENTER STATS)
+// ==================================================
+const openMatchStats = async (matchId) => {
+  isLoadingModal.value = true;
+  showMatchModal.value = true;
+  
+  try {
+    const token = localStorage.getItem('betgenius_token');
+    // O EndPoint mágico S-Tier que traz xG, Poisson e tudo
+    const res = await axios.get(`${API_BASE_URL}/api/v1/match-center/${matchId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    selectedMatchStats.value = res.data.partida;
+    botLogs.value.unshift(`> SYS: Estatísticas Profundas de M_ID ${matchId} extraídas.`);
+    if (botLogs.value.length > 8) botLogs.value.pop();
+  } catch (error) {
+    console.error("Falha ao abrir estatísticas", error);
+    alert("Falha ao carregar as métricas da partida. Tente novamente.");
+    showMatchModal.value = false;
+  } finally {
+    isLoadingModal.value = false;
+  }
+};
+
+const closeMatchStats = () => {
+  showMatchModal.value = false;
+  setTimeout(() => {
+    selectedMatchStats.value = null;
+  }, 300); // Aguarda o fim da animação de saída
+};
+
 
 // ==================================================
-// WEBSOCKETS (HFT REAL-TIME NA PORTA 8000)
+// WEBSOCKETS (HFT REAL-TIME)
 // ==================================================
 let socket = null;
 
 onMounted(() => {
-  // Chamada inicial de dados
   fetchRadarData();
 
-  // Socket Conectado à porta 8000
   socket = io(GATEWAY_URL, {
     transports: ['websocket']
   });
@@ -520,7 +664,7 @@ onMounted(() => {
   socket.on('NEW_ALPHA_OPPORTUNITY', (payload) => {
     if(payload.signals && Array.isArray(payload.signals)) {
       payload.signals.forEach(sig => {
-        botLogs.value.unshift(`> ALPHA: Detectado edge de +${sig.expected_value_pct}% EV.`);
+        botLogs.value.unshift(`> ALPHA: Edge de +${sig.expected_value_pct}% EV capturado.`);
         if (botLogs.value.length > 8) botLogs.value.pop();
 
         const novoAlerta = {
@@ -592,4 +736,44 @@ input[type=range]::-moz-range-thumb {
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(140, 199, 255, 0.2); border-radius: 10px; }
+
+/* Transições de Listas (Vue) */
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.5s ease;
+}
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: translateX(-30px);
+}
+
+/* Transição do Modal S-Tier */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+.modal-fade-enter-active .relative {
+  animation: modal-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.modal-fade-leave-active .relative {
+  animation: modal-pop 0.3s cubic-bezier(0.16, 1, 0.3, 1) reverse forwards;
+}
+
+@keyframes modal-pop {
+  0% { transform: scale(0.95) translateY(20px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 </style>

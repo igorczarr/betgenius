@@ -1,221 +1,307 @@
 <template>
-  <WidgetCard titulo="Ticket Builder (SGP & Accumulators)">
-    <template #icone>
-      <Award :size="16" class="text-yellow-500" />
-    </template>
+  <div class="fixed right-6 bottom-6 z-50 flex flex-col items-end pointer-events-none">
     
-    <div class="flex flex-col xl:flex-row gap-6">
-      
-      <div class="w-full xl:w-2/3 flex flex-col gap-4">
-        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest border-b border-white/10 pb-2">Oportunidades Mapeadas (+EV)</h3>
+    <Transition name="bounce">
+      <button 
+        v-if="!isOpen" 
+        @click="togglePanel"
+        class="pointer-events-auto relative flex items-center justify-center w-14 h-14 bg-[#0a0f16]/90 backdrop-blur-md border border-[#10B981]/40 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:bg-[#10B981]/10 transition-all duration-300 group"
+      >
+        <Receipt :size="24" class="text-[#10B981] group-hover:scale-110 transition-transform duration-300" />
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto max-h-[500px] custom-scrollbar pr-2">
-          <div 
-            v-for="(pick, index) in goldPicks" 
-            :key="index" 
-            @click="toggleSelection(pick)"
-            :class="[
-              'p-4 rounded-xl relative overflow-hidden group border transition-all cursor-pointer select-none',
-              isSelected(pick) ? 'border-yellow-500 bg-yellow-500/10 shadow-[0_0_20px_rgba(234,179,8,0.2)]' : 'border-white/10 bg-black/20 hover:border-yellow-500/50'
-            ]"
+        <span v-if="selections.length > 0" class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#10B981] text-black text-[10px] font-bold border-2 border-[#0a0f16]">
+          {{ selections.length }}
+        </span>
+      </button>
+    </Transition>
+
+    <Transition name="slide-up">
+      <div v-if="isOpen" class="pointer-events-auto w-[360px] max-h-[600px] flex flex-col bg-[#0a0f16]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
+        
+        <div class="flex justify-between items-center p-4 border-b border-white/5 bg-gradient-to-r from-white/[0.02] to-transparent">
+          <div class="flex items-center gap-2">
+            <div class="p-1.5 bg-[#10B981]/20 rounded-md">
+              <Terminal :size="16" class="text-[#10B981]" />
+            </div>
+            <h3 class="text-sm font-bold text-white uppercase tracking-widest">Ticket Builder</h3>
+          </div>
+          <button @click="togglePanel" class="text-gray-500 hover:text-white transition-colors">
+            <Minimize2 :size="18" />
+          </button>
+        </div>
+
+        <div class="p-3 border-b border-white/5 bg-black/20">
+          <div class="flex p-1 rounded-lg bg-black/40 border border-white/10 shadow-inner">
+            <button 
+              v-for="risk in riskProfiles" :key="risk.id"
+              @click="changeRisk(risk.id)"
+              class="flex-1 py-1.5 text-[10px] uppercase tracking-wider font-bold rounded transition-colors text-center"
+              :class="activeRisk === risk.id ? risk.activeClass : 'text-gray-500 hover:text-gray-300'"
+            >
+              {{ risk.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2 min-h-[200px]">
+          
+          <template v-if="isLoading">
+            <div v-for="i in 3" :key="'skel'+i" class="h-[68px] rounded-lg border border-white/5 bg-white/[0.02] animate-pulse"></div>
+          </template>
+
+          <template v-else>
+            <div v-for="(leg, index) in selections" :key="index" 
+                 class="p-3 rounded-lg border border-white/5 bg-gradient-to-br from-white/[0.03] to-transparent group relative hover:border-[#10B981]/30 transition-all duration-300">
+              
+              <div class="flex justify-between items-start mb-1.5">
+                <span class="text-xs font-bold text-white truncate pr-2 leading-tight">{{ leg.jogo || `${leg.home_team} v ${leg.away_team}` }}</span>
+                <span class="text-xs font-mono font-bold text-[#10B981]">{{ Number(leg.odd).toFixed(2) }}</span>
+              </div>
+              
+              <div class="flex justify-between items-center">
+                <span class="text-[10px] text-gray-400 uppercase tracking-wider truncate max-w-[80%]">{{ leg.mercado || leg.market }}</span>
+                <button @click="removeLeg(index)" class="text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                  <XCircle :size="14" />
+                </button>
+              </div>
+            </div>
+
+            <div v-if="selections.length === 0" class="flex-1 flex flex-col items-center justify-center py-8 opacity-50 text-center">
+              <Crosshair size="32" class="text-gray-500 mb-3 opacity-50"/>
+              <span class="text-[10px] text-gray-400 uppercase tracking-widest font-bold px-4 leading-relaxed">
+                Adicione mercados no painel ao lado ou use a IA para gerar um bilhete.
+              </span>
+            </div>
+          </template>
+        </div>
+
+        <div class="px-3 pb-3">
+          <button 
+            @click="generateAutoTicket"
+            :disabled="isLoading"
+            class="w-full py-2.5 rounded-lg border border-dashed border-white/20 text-gray-400 text-[10px] font-bold uppercase tracking-widest hover:border-[#10B981] hover:text-[#10B981] hover:bg-[#10B981]/5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            <div class="absolute top-0 right-0 bg-yellow-500/20 text-yellow-500 text-[10px] font-bold px-2 py-1 rounded-bl-lg font-mono">
-              EV +{{ pick.ev }}%
-            </div>
-
-            <span class="text-[10px] text-gray-500 font-mono uppercase tracking-widest block mb-1">{{ pick.liga }}</span>
-            <h4 class="text-sm font-bold text-white mb-3">{{ pick.home_team }} vs {{ pick.away_team }}</h4>
-            
-            <div class="flex justify-between items-end">
-              <div>
-                <span class="text-[10px] text-gray-500 block uppercase">Mercado</span>
-                <span class="text-xs font-bold text-yellow-400">{{ pick.mercado }}</span>
-              </div>
-              <div class="text-right">
-                <span class="text-[10px] text-gray-500 block uppercase">Odd / IA Conf.</span>
-                <span class="text-sm font-mono font-bold text-white">
-                  {{ pick.odd.toFixed(2) }} 
-                  <span class="text-[#10B981] text-[10px] ml-1">{{ pick.confianca }}%</span>
-                </span>
-              </div>
-            </div>
-
-            <div v-if="isSelected(pick)" class="absolute inset-0 flex items-center justify-center bg-yellow-500/5 backdrop-blur-[1px]">
-              <CheckCircle2 class="text-yellow-500" :size="32" />
-            </div>
-          </div>
-
-          <div v-if="goldPicks.length === 0 && !isLoading" class="col-span-full py-10 text-center opacity-40">
-            <FlaskConical size="40" class="mx-auto mb-3 text-gray-500" />
-            <p class="text-xs uppercase tracking-[0.2em] font-bold">IA analisando mercados em busca de assimetrias...</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="w-full xl:w-1/3 bg-black/40 border border-white/10 rounded-xl p-4 flex flex-col h-full shadow-inner">
-        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest border-b border-white/10 pb-2 mb-4 flex justify-between">
-          <span>Seu Bilhete (Bet Slip)</span>
-          <span class="text-yellow-500">{{ selectedPicks.length }} Seleções</span>
-        </h3>
-
-        <div class="flex flex-col gap-2 flex-1 overflow-y-auto custom-scrollbar pr-1 min-h-[150px]">
-          <div v-for="pick in selectedPicks" :key="'slip'+pick.match_id" class="bg-[#121927] border border-white/5 p-2 rounded flex justify-between items-center group">
-            <div class="flex flex-col truncate pr-2">
-              <span class="text-[10px] font-bold text-white truncate">{{ pick.home_team }} v {{ pick.away_team }}</span>
-              <span class="text-[9px] text-gray-400">{{ pick.mercado }}</span>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="text-xs font-mono font-bold text-yellow-400">{{ pick.odd.toFixed(2) }}</span>
-              <button @click="toggleSelection(pick)" class="text-gray-600 hover:text-red-400 transition-colors"><X size="14"/></button>
-            </div>
-          </div>
-          
-          <div v-if="selectedPicks.length === 0" class="flex-1 flex items-center justify-center text-[10px] text-gray-600 font-mono uppercase tracking-widest text-center px-4">
-            Selecione mercados ao lado para montar seu bilhete simples ou SGP.
-          </div>
+            <Wand2 v-if="!isLoading" :size="14" /> 
+            <Loader2 v-else :size="14" class="animate-spin" /> 
+            Auto-Build ({{ activeRiskLabel }})
+          </button>
         </div>
 
-        <div class="mt-4 pt-4 border-t border-white/10 flex flex-col gap-3">
-          <div class="flex justify-between items-center">
-            <span class="text-[10px] text-gray-400 uppercase tracking-widest">Odd Combinada</span>
-            <span class="text-xl font-mono font-bold text-white">{{ combinedMetrics.odd.toFixed(2) }}</span>
+        <div class="p-4 bg-gradient-to-t from-black/80 to-transparent border-t border-white/10">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] text-gray-400 uppercase tracking-widest">Odd Combinada (Justa)</span>
+            <span class="text-xs font-mono text-white">{{ validationData.combined_odd.toFixed(2) }}</span>
           </div>
           
-          <div class="flex justify-between items-center">
-            <span class="text-[10px] text-gray-400 uppercase tracking-widest">EV Combinado (SGP)</span>
-            <span class="text-sm font-mono font-bold" :class="combinedMetrics.ev > 0 ? 'text-[#10B981]' : 'text-red-400'">
-              {{ combinedMetrics.ev > 0 ? '+' : '' }}{{ combinedMetrics.ev.toFixed(2) }}%
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] text-gray-400 uppercase tracking-widest">EV Combinado</span>
+            <span class="text-xs font-mono" :class="validationData.expected_value_pct > 0 ? 'text-[#10B981]' : 'text-red-400'">
+              {{ validationData.expected_value_pct > 0 ? '+' : '' }}{{ validationData.expected_value_pct.toFixed(1) }}%
             </span>
           </div>
 
-          <div class="flex justify-between items-center bg-yellow-500/10 border border-yellow-500/30 p-2 rounded">
-            <span class="text-[10px] text-yellow-500 uppercase tracking-widest font-bold">Kelly Stake (Recomendada)</span>
-            <span class="text-lg font-mono font-bold text-yellow-400">{{ combinedMetrics.kellyStake.toFixed(2) }}u</span>
+          <div class="flex justify-between items-end mb-4">
+            <span class="text-[10px] text-gray-400 uppercase tracking-widest">Stake Recomendada (R$)</span>
+            <span class="text-xl font-mono font-bold text-white">R$ {{ validationData.recommended_stake_brl.toFixed(2) }}</span>
           </div>
 
           <button 
-            @click="executeTicket" 
-            :disabled="selectedPicks.length === 0 || isExecuting"
-            class="w-full bg-[#10B981] text-black py-3 text-xs font-bold uppercase tracking-widest rounded hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2 mt-2"
+            @click="executeTicket"
+            :disabled="selections.length === 0 || isExecuting || validationData.recommended_stake_brl <= 0"
+            class="w-full bg-[#10B981] text-black font-bold uppercase tracking-widest py-3 rounded-lg shadow-[0_4px_20px_rgba(16,185,129,0.2)] flex justify-center items-center gap-2 hover:bg-white hover:scale-[1.02] transition-all disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed"
           >
-            <Play v-if="!isExecuting" size="14" strokeWidth="3"/>
-            <Loader2 v-else size="14" class="animate-spin" />
-            {{ isExecuting ? 'Conectando à Bet365...' : 'Executar Aposta (Bet365)' }}
+            <Zap v-if="!isExecuting" :size="16" />
+            <Loader2 v-else :size="16" class="animate-spin" />
+            {{ isExecuting ? 'Liquidando Ordem...' : 'Executar Ordem' }}
           </button>
         </div>
 
       </div>
-    </div>
-  </WidgetCard>
+    </Transition>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { Award, Play, CheckCircle2, Loader2, FlaskConical, X } from 'lucide-vue-next';
+import { ref, computed, watch } from 'vue';
+import { Receipt, XCircle, Wand2, Terminal, Minimize2, Crosshair, Zap, Loader2 } from 'lucide-vue-next';
 import axios from 'axios';
-import WidgetCard from './WidgetCard.vue';
 
-const goldPicks = ref([]);
-const selectedPicks = ref([]);
-const isLoading = ref(true);
+// ==========================================
+// ESTADO DO COMPONENTE
+// ==========================================
+const isOpen = ref(false);
+const isLoading = ref(false);
 const isExecuting = ref(false);
+const selections = ref([]);
 
-// Verifica se a pick já está no bilhete
-const isSelected = (pick) => selectedPicks.value.some(p => p.match_id === pick.match_id);
-
-// Adiciona/Remove do bilhete
-const toggleSelection = (pick) => {
-  const index = selectedPicks.value.findIndex(p => p.match_id === pick.match_id);
-  if (index > -1) selectedPicks.value.splice(index, 1);
-  else selectedPicks.value.push(pick);
-};
-
-// ==========================================
-// MOTOR MATEMÁTICO: ODD COMBINADA, EV E KELLY
-// ==========================================
-const combinedMetrics = computed(() => {
-  if (selectedPicks.value.length === 0) return { odd: 0, ev: 0, kellyStake: 0 };
-
-  // 1. Odd Combinada (Produto das odds)
-  // *Nota: Em SGP reais, a Bet365 aplica um desconto de correlação. Aqui faremos a matemática pura.
-  const combinedOdd = selectedPicks.value.reduce((acc, pick) => acc * pick.odd, 1);
-
-  // 2. Probabilidade Implícita e Probabilidade IA Combinadas
-  const combinedAIProb = selectedPicks.value.reduce((acc, pick) => acc * (pick.confianca / 100), 1);
-  
-  // 3. EV Combinado = (Probabilidade Real * Odd Oferecida) - 1
-  const combinedEV = ((combinedAIProb * combinedOdd) - 1) * 100;
-
-  // 4. Critério de Kelly (Fração)
-  // f = (bp - q) / b
-  // b = Odd decimal - 1 (Lucro líquido)
-  // p = probabilidade da IA
-  // q = 1 - probabilidade da IA
-  let kellyFraction = 0;
-  if (combinedEV > 0) {
-    const b = combinedOdd - 1;
-    const p = combinedAIProb;
-    const q = 1 - p;
-    const fullKelly = (b * p - q) / b;
-    
-    // Aplicamos Kelly/4 (Conservador para proteção de banca quantitativa)
-    // O resultado é um multiplicador (ex: 0.02 = 2% da banca = 2 units)
-    kellyFraction = Math.max(0, (fullKelly / 4) * 100); 
-  }
-
-  return {
-    odd: combinedOdd,
-    ev: combinedEV,
-    kellyStake: kellyFraction
-  };
+// Dados reativos validados pelo Backend
+const validationData = ref({
+  combined_odd: 0.0,
+  combined_probability_pct: 0.0,
+  expected_value_pct: 0.0,
+  recommended_stake_brl: 0.0
 });
 
 // ==========================================
-// INTEGRAÇÃO COM BACKEND
+// PERFIS DE RISCO (MAPEAMENTO INSTITUCIONAL)
 // ==========================================
-const fetchGoldPicks = async () => {
+const riskProfiles = [
+  { id: 'CONSERVATIVE', label: 'Seguro', activeClass: 'bg-[#10B981]/20 text-[#10B981]', apiParam: 'conservador' },
+  { id: 'MODERATE', label: 'Mod', activeClass: 'bg-yellow-500/20 text-yellow-400', apiParam: 'moderado' },
+  { id: 'AGGRESSIVE', label: 'Agr', activeClass: 'bg-orange-500/20 text-orange-400', apiParam: 'agressivo' },
+  { id: 'MOONSHOT', label: 'Moon', activeClass: 'bg-red-500/20 text-red-500 shadow-[0_0_10px_rgba(239,68,68,0.2)]', apiParam: 'agressivo' }
+];
+
+const activeRisk = ref('CONSERVATIVE');
+
+const activeRiskLabel = computed(() => {
+  return riskProfiles.find(r => r.id === activeRisk.value)?.label || '';
+});
+
+// ==========================================
+// FUNÇÕES DE INTERFACE
+// ==========================================
+const togglePanel = () => {
+  isOpen.value = !isOpen.value;
+};
+
+const changeRisk = (riskId) => {
+  activeRisk.value = riskId;
+  validateCart(); // Recalcula a Stake imediatamente se o perfil de risco mudar
+};
+
+const removeLeg = (index) => {
+  selections.value.splice(index, 1);
+};
+
+// ==========================================
+// INTEGRAÇÃO COM AS NOVAS ROTAS (API GATEWAY)
+// ==========================================
+
+// 1. Rota de Validação Dinâmica S-Tier
+const validateCart = async () => {
+  if (selections.value.length === 0) {
+    validationData.value = { combined_odd: 0, combined_probability_pct: 0, expected_value_pct: 0, recommended_stake_brl: 0 };
+    return;
+  }
+
   try {
-    isLoading.value = true;
-    const res = await axios.get('http://localhost:8000/api/v1/quant/gold-picks');
-    goldPicks.value = res.data;
+    // Formata o array para o Pydantic do backend (CartValidationRequest)
+    const payloadSelections = selections.value.map(s => ({
+      match_id: s.match_id || 1,
+      home_team: s.home_team || s.jogo.split(' v ')[0] || "Home",
+      away_team: s.away_team || s.jogo.split(' v ')[1] || "Away",
+      market: s.mercado || s.market,
+      odd: s.odd,
+      prob: s.prob || (s.confianca ? s.confianca / 100 : 0.5) // Fallback de prob se vier do auto-builder antigo
+    }));
+
+    const res = await axios.post('http://localhost:8000/api/v1/sgp/validate-cart', {
+      risk_profile: activeRisk.value,
+      selections: payloadSelections
+    });
+
+    if (res.data.status === 'error') {
+      alert(res.data.message);
+      selections.value.pop(); // Remove a última perna que causou o erro (Teto de variância)
+    } else {
+      validationData.value = res.data;
+    }
   } catch (error) {
-    console.error("Erro ao carregar Picks da IA:", error);
+    console.error("Erro ao validar carrinho:", error);
+  }
+};
+
+// Assiste mudanças no carrinho para re-validar em tempo real
+watch(selections, () => {
+  validateCart();
+}, { deep: true });
+
+
+// 2. Rota de Auto-Construção (O Cientista)
+const generateAutoTicket = async () => {
+  isLoading.value = true;
+  selections.value = []; // Limpa carrinho atual
+  
+  try {
+    const riskParam = riskProfiles.find(r => r.id === activeRisk.value).apiParam;
+    
+    // Bate na rota do main.py que varre a base procurando os EV+
+    const res = await axios.post('http://localhost:8000/api/v1/quant/auto-builder', {
+      riskProfile: riskParam
+    });
+    
+    if (res.data.selecoes && res.data.selecoes.length > 0) {
+      selections.value = res.data.selecoes;
+      if(!isOpen.value) isOpen.value = true; // Abre o painel para o usuário ver a mágica
+    } else {
+      alert("Nenhum padrão tático de alto valor encontrado nas linhas atuais.");
+    }
+  } catch (error) {
+    console.error("Erro ao invocar Auto-Builder:", error);
   } finally {
     isLoading.value = false;
   }
 };
 
-// Executa o bilhete empacotado no Node.js
+// 3. Rota de Execução (O Deep Link e o Ledger)
 const executeTicket = async () => {
+  isExecuting.value = true;
   try {
-    isExecuting.value = true;
-    
-    // O Payload perfeito contendo o bilhete inteiro e os cálculos
-    const payload = {
-      type: selectedPicks.value.length > 1 ? 'SGP/ACCUMULATOR' : 'SINGLE',
-      selections: selectedPicks.value,
-      combined_odd: combinedMetrics.value.odd,
-      expected_value: combinedMetrics.value.ev,
-      stake_amount: combinedMetrics.value.kellyStake
-    };
+    const payloadSelections = selections.value.map(s => ({
+      match_id: s.match_id || 1,
+      home_team: s.home_team || s.jogo?.split(' Alpha ')[0] || "Equipe Casa",
+      away_team: s.away_team || s.jogo?.split(' Target ')[0] || "Equipe Fora",
+      market: s.mercado || s.market,
+      odd: s.odd,
+      prob: s.prob || (s.confianca ? s.confianca / 100 : 0.5)
+    }));
 
-    await axios.post('http://localhost:8000/api/v1/fund/execute-ticket', payload);
-    
-    alert(`Sucesso! Ticket executado no sistema. A ordem de compra foi enviada.`);
-    selectedPicks.value = [];
-    await fetchGoldPicks();
+    const res = await axios.post('http://localhost:8000/api/v1/sgp/execute', {
+      risk_profile: activeRisk.value,
+      stake_brl: validationData.value.recommended_stake_brl,
+      total_odd: validationData.value.combined_odd,
+      bookmaker: 'Pinnacle', // Poderia vir de um select na UI
+      selections: payloadSelections
+    });
+
+    if (res.data.status === 'success') {
+      // Abre a casa de apostas numa nova aba instantaneamente (Deep Link)
+      window.open(res.data.action_url, '_blank');
+      
+      // Limpa a interface após o sucesso
+      selections.value = [];
+      isOpen.value = false;
+    }
   } catch (error) {
-    alert(error.response?.data?.error || "Erro na execução da aposta.");
+    alert(error.response?.data?.detail || "Falha crítica ao liquidar ordem.");
   } finally {
     isExecuting.value = false;
   }
 };
-
-onMounted(fetchGoldPicks);
 </script>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar { width: 3px; }
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.2); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.5); }
+
+/* Animações S-Tier */
+.bounce-enter-active { animation: bounce-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.bounce-leave-active { animation: bounce-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) reverse; }
+@keyframes bounce-in {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.slide-up-enter-active, .slide-up-leave-active {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: bottom right;
+}
+.slide-up-enter-from, .slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+}
 </style>

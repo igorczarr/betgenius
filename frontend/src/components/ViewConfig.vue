@@ -255,7 +255,7 @@ import {
 const globalState = inject('globalState');
 
 // Puxa a variável de ambiente da Vercel. Se não achar, usa o localhost de fallback.
-const API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/v1`;
+const API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1`;
 
 const abaAtiva = ref('tesouraria');
 const isLoading = ref(true);

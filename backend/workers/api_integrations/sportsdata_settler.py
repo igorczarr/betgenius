@@ -1,4 +1,5 @@
 # betgenius-backend/workers/api_integrations/sportsdata_settler.py
+
 import asyncio
 import logging
 import httpx
@@ -13,6 +14,9 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 from core.database import db
 from engine.entity_resolution import entity_resolver
 
+# Importamos o BankrollManager para fazer a liquidação do capital no final
+from engine.bankroll_manager import BankrollManager
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [SPORTSDATA-SETTLER] %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -20,7 +24,8 @@ class SportsDataSettler:
     """
     Motor de Liquidação S-Tier.
     Consome a SportsDataIO de forma hiper-eficiente (ByDate) para salvar cota.
-    Extrai o Box Score final, calcula o xG Sintético e liquida as partidas no Data Warehouse.
+    Extrai o Box Score final, calcula o xG Sintético, liquida as partidas no Data Warehouse
+    e fecha o caixa das operações abertas no fund_ledger.
     """
     def __init__(self):
         self.api_key = os.getenv("SPORTSDATA_API_KEY", "")
@@ -129,7 +134,7 @@ class SportsDataSettler:
                     home_canonical = await entity_resolver.normalize_name(raw_home, False)
                     away_canonical = await entity_resolver.normalize_name(raw_away, False)
                     
-                    # 2. Busca o jogo pendente no banco (que foi criado pelo daily_updater ou theodds_watcher)
+                    # 2. Busca o jogo pendente no banco
                     query = """
                         SELECT m.id 
                         FROM core.matches_history m
@@ -165,6 +170,7 @@ class SportsDataSettler:
                     result = 'H' if h_goals > a_goals else ('A' if a_goals > h_goals else 'D')
                     
                     # 4. UPDATE Cirúrgico de Liquidação
+                    # Usamos COALESCE no xg para NÃO sobrescrever o xG do FBref (se ele já existir)
                     await conn.execute("""
                         UPDATE core.matches_history 
                         SET home_goals = $1, away_goals = $2, match_result = $3,
@@ -173,7 +179,7 @@ class SportsDataSettler:
                             home_fouls = $8, away_fouls = $9,
                             home_yellow = $10, away_yellow = $11,
                             home_red = $12, away_red = $13,
-                            xg_home = $14, xg_away = $15,
+                            xg_home = COALESCE(xg_home, $14), xg_away = COALESCE(xg_away, $15),
                             status = 'FINISHED'
                         WHERE id = $16
                     """, 
@@ -188,8 +194,18 @@ class SportsDataSettler:
                     
                     settled_count += 1
                     
+        logger.info(f"🏆 BOX SCORES CONCLUÍDOS: {settled_count} partidas convertidas para FINISHED.")
+        
+        # 5. O FECHAMENTO DO CAIXA (Liquidação do Ledger)
+        logger.info("💼 Acionando o Bankroll Manager para liquidar operações abertas no fundo...")
+        try:
+            manager = BankrollManager()
+            await manager.settle_pending_bets()
+            logger.info("✅ Capital liquidado e saldo atualizado no Banco de Dados.")
+        except Exception as e:
+            logger.error(f"Erro ao liquidar o Ledger: {e}")
+
         await db.disconnect()
-        logger.info(f"🏆 LIQUIDAÇÃO CONCLUÍDA: {settled_count} partidas do fundo foram atualizadas com Box Score e xG.")
 
 if __name__ == "__main__":
     settler = SportsDataSettler()

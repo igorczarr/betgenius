@@ -1,4 +1,5 @@
 # betgenius-backend/workers/api_integrations/fbref_wages_updater.py
+
 import sys
 import os
 import io
@@ -9,17 +10,20 @@ from io import StringIO
 import random
 from pathlib import Path
 import re
+from curl_cffi import requests
 
 # FIX DEFINITIVO DE UNICODE PARA WINDOWS
 if sys.platform == 'win32':
     os.environ["PYTHONIOENCODING"] = "utf-8"
+    os.environ["PYTHONUTF8"] = "1"
+    os.environ["TERM"] = "dumb"
     try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-    except AttributeError:
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
         pass
-
-import nodriver as uc
 
 # Adiciona o backend ao path para importações absolutas
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -30,29 +34,26 @@ from engine.entity_resolution import entity_resolver
 # Log ASCII Clean
 class SafeASCIIFormatter(logging.Formatter):
     def format(self, record):
-        msg = super().format(record)
-        return msg.encode('ascii', 'ignore').decode('ascii')
+        try: return super().format(record)
+        except Exception:
+            record.msg = str(record.msg).encode('ascii', 'ignore').decode('ascii')
+            return super().format(record)
 
+logging.root.handlers = []
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(SafeASCIIFormatter("%(asctime)s [WAGE-EXTRACTOR] %(levelname)s: %(message)s"))
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-for h in logger.handlers[:]: logger.removeHandler(h)
-logger.addHandler(handler)
+logging.root.addHandler(handler)
+logging.root.setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 class FBrefWagesUpdater:
     """
     Motor Financeiro S-Tier.
-    Usa o Ghost Monitor (Nodriver) para burlar a limitação da SoccerData
-    e extrair a Folha Salarial Anual das equipes de 2015 a 2025.
+    Usa curl_cffi (impersonando o Chrome 120+) para burlar o Cloudflare e
+    extrair a Folha Salarial Anual das equipes da temporada atual.
     """
     def __init__(self):
-        self.start_year = 2015
-        self.end_year = 2025
-        self.browser = None
-        
-        # Mapeamento do FBref (ID da Liga e Nome na URL)
+        # Mapeamento Direto do FBref (Sport Key -> ID, Nome URL, Cross-Year)
         self.league_config = {
             "soccer_epl": {"id": "9", "name": "Premier-League", "cross": True},
             "soccer_spain_la_liga": {"id": "12", "name": "La-Liga", "cross": True},
@@ -83,67 +84,39 @@ class FBrefWagesUpdater:
         url = f"https://fbref.com/en/comps/{config['id']}/{season_str}/wages/{season_str}-{config['name']}-Wages"
         return url, season_str
 
-    async def _init_browser(self):
-        if not self.browser:
-            logger.info("Iniciando Motor Crawler (Modo 'Ghost Monitor')...")
-            self.browser = await uc.start(
-                headless=False,
-                browser_args=[
-                    "--window-position=-32000,-32000",
-                    "--window-size=1920,1080",
-                    "--disable-notifications",
-                    "--no-sandbox"
-                ]
-            )
-
-    async def fetch_wage_html(self, url: str) -> str:
-        await self._init_browser()
-        await asyncio.sleep(3.0) 
+    def _fetch_url_sync(self, url: str) -> str:
+        """Faz a requisição síncrona nativa com bypass de Cloudflare (curl_cffi)."""
+        # Impersonate 'chrome120' resolve >90% dos bloqueios de TLS Fingerprinting atuais
+        response = requests.get(url, impersonate="chrome120", timeout=30.0)
         
-        for attempt in range(3):
-            tab = None
-            try:
-                tab = await self.browser.get(url, new_tab=True)
-                passed = False
-                
-                for i in range(12):
-                    await asyncio.sleep(1.5)
-                    html = await tab.get_content()
-                    
-                    # Identifica se a tabela de salários carregou ou se a página não existe
-                    if "Annual Wages" in html or "Weekly Wages" in html:
-                        passed = True
-                        break
-                    elif "Just a moment" in html or "cf-turnstile" in html:
-                        if i % 3 == 0:
-                            await tab.evaluate(f"window.scrollBy(0, {random.randint(100, 300)});")
-                        continue
-                    elif "404 Not Found" in html or "Page Not Found" in html or "does not have wage data" in html:
-                        await tab.close()
-                        return "NO_DATA"
-                        
-                if passed:
-                    final_html = await tab.get_content()
-                    await tab.close()
-                    return final_html
-                else:
-                    if tab: await tab.close()
-                    
-            except Exception as e:
-                if tab: await tab.close()
-                await asyncio.sleep(5)
-                
-        return None
+        if response.status_code == 403:
+            raise PermissionError("403 Forbidden: O Cloudflare bloqueou a requisição.")
+        if response.status_code == 429:
+            raise ConnectionError("429 Too Many Requests: Limite de taxa atingido.")
+        if response.status_code == 404:
+            return "NO_DATA"
+            
+        if response.status_code != 200:
+             raise ConnectionError(f"Erro HTTP {response.status_code}")
+             
+        return response.text
 
     def clean_currency(self, value_str: str) -> float:
         """Remove símbolos ($, €, £, R$), vírgulas e espaços para extrair o valor puro."""
         if pd.isna(value_str): return 0.0
         clean_str = str(value_str).replace(',', '').replace(' ', '')
-        # Extrai apenas os números
         numbers = re.findall(r'\d+', clean_str)
         if numbers:
             return float(numbers[0])
         return 0.0
+
+    def _flatten_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df is None or df.empty: return pd.DataFrame()
+        if isinstance(df.columns, pd.MultiIndex):
+             df.columns = ['_'.join(str(c).lower() for c in col if c and not str(c).startswith('unnamed')).strip() for col in df.columns]
+        else:
+             df.columns = [str(col).lower().strip() for col in df.columns]
+        return df
 
     def _extract_dataframe(self, html_content: str) -> pd.DataFrame:
         try:
@@ -151,12 +124,8 @@ class FBrefWagesUpdater:
             dfs = pd.read_html(StringIO(html_clean))
             
             for df in dfs:
-                if isinstance(df.columns, pd.MultiIndex):
-                     df.columns = ['_'.join(str(c) for c in col if c and not str(c).startswith('Unnamed')).strip() for col in df.columns]
-                else:
-                     df.columns = [str(col).strip() for col in df.columns]
-                
-                if any('Squad' in col for col in df.columns) and any('Annual' in col for col in df.columns):
+                df = self._flatten_columns(df)
+                if any('squad' in col or 'team' in col for col in df.columns) and any('annual' in col for col in df.columns):
                     return df
         except:
             pass
@@ -176,81 +145,103 @@ class FBrefWagesUpdater:
         url, season_str = self._build_wage_url(sport_key, year)
         if not url: return
         
-        logger.info(f"Buscando Folha Salarial: {sport_key} ({season_str})")
-        html = await self.fetch_wage_html(url)
+        logger.info(f"📡 Buscando Folha Salarial: {sport_key} ({season_str})")
         
-        if html == "NO_DATA":
-            logger.info(f"-> Sem dados financeiros publicos para {sport_key} {season_str}. Pulando.")
-            return
-        elif not html:
-            logger.warning(f"-> Bloqueio/Erro ao acessar {sport_key} {season_str}.")
-            return
-        
-        df = self._extract_dataframe(html)
-        if df.empty:
-            logger.warning(f"-> Tabela nao encontrada no HTML para {sport_key} {season_str}.")
-            return
+        try:
+            loop = asyncio.get_event_loop()
+            html = await loop.run_in_executor(None, self._fetch_url_sync, url)
             
-        squad_col = next((c for c in df.columns if 'Squad' in c), None)
-        wage_col = next((c for c in df.columns if 'Annual' in c), None)
-        
-        if not squad_col or not wage_col:
-            return
+            if html == "NO_DATA":
+                logger.info(f" └─ 📭 Sem dados financeiros públicos para {sport_key} {season_str}. Pulando.")
+                return
+                
+            df = self._extract_dataframe(html)
+            
+            if df is None or df.empty:
+                logger.warning(f" └─ ⚠️ Tabela não encontrada no HTML para {sport_key} {season_str}.")
+                return
+                
+            squad_col = next((c for c in df.columns if 'squad' in c or 'team' in c), None)
+            wage_col = next((c for c in df.columns if 'annual' in c and 'wages' in c), None)
+            if not wage_col:
+                wage_col = next((c for c in df.columns if 'annual' in c), None)
+            
+            if not squad_col or not wage_col:
+                logger.warning(" └─ ⚠️ Estrutura da tabela irreconhecível.")
+                return
 
-        updated_count = 0
-        async with db.pool.acquire() as conn:
-            # Garante que a tabela existe (caso não tenha sido criada antes)
-            await conn.execute("""
-                CREATE SCHEMA IF NOT EXISTS fbref_squad;
-                CREATE TABLE IF NOT EXISTS fbref_squad.standings_wages (
-                    team_id INTEGER, season VARCHAR(10), pts INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, wage_bill_annual NUMERIC,
-                    UNIQUE(team_id, season)
-                );
-            """)
+            updated_count = 0
+            async with db.pool.acquire() as conn:
+                await conn.execute("""
+                    CREATE SCHEMA IF NOT EXISTS fbref_squad;
+                    CREATE TABLE IF NOT EXISTS fbref_squad.standings_wages (
+                        team_id INTEGER, season VARCHAR(10), pts INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, wage_bill_annual NUMERIC,
+                        UNIQUE(team_id, season)
+                    );
+                """)
 
-            async with conn.transaction():
-                for index, row in df.iterrows():
-                    raw_team = str(row[squad_col])
-                    
-                    # O FBref coloca o total da liga na última linha do quadro
-                    if raw_team.lower() in ['total', 'average', 'nan']: continue
-                    
-                    wage_value = self.clean_currency(row[wage_col])
-                    if wage_value == 0: continue
+                async with conn.transaction():
+                    logger.info(f"📊 Registrando Folhas Extraídas para {sport_key} ({season_str}):")
+                    for index, row in df.iterrows():
+                        raw_team = str(row[squad_col])
+                        
+                        if raw_team.lower() in ['total', 'average', 'nan']: continue
+                        
+                        wage_value = self.clean_currency(row[wage_col])
+                        if wage_value == 0: continue
 
-                    canonical = await entity_resolver.normalize_name(raw_team, False)
-                    team_id = await self.auto_register_team(conn, canonical, sport_key)
-                    if not team_id: continue
+                        canonical = await entity_resolver.normalize_name(raw_team, False)
+                        team_id = await self.auto_register_team(conn, canonical, sport_key)
+                        if not team_id: continue
 
-                    # Faz o UPSERT da folha salarial mantendo pts e wins se existirem
-                    await conn.execute("""
-                        INSERT INTO fbref_squad.standings_wages (team_id, season, wage_bill_annual)
-                        VALUES ($1, $2, $3)
-                        ON CONFLICT (team_id, season) DO UPDATE SET wage_bill_annual = EXCLUDED.wage_bill_annual
-                    """, team_id, season_str, wage_value)
-                    
-                    updated_count += 1
-                    
-        logger.info(f"OK: {updated_count} folhas salariais salvas para {sport_key} ({season_str}).")
+                        # TELEMETRIA S-TIER
+                        logger.info(f"   💸 {canonical}: {wage_value:,.2f}")
+
+                        await conn.execute("""
+                            INSERT INTO fbref_squad.standings_wages (team_id, season, wage_bill_annual)
+                            VALUES ($1, $2, $3)
+                            ON CONFLICT (team_id, season) DO UPDATE SET wage_bill_annual = EXCLUDED.wage_bill_annual
+                        """, team_id, season_str, wage_value)
+                        
+                        updated_count += 1
+                        
+            if updated_count > 0:
+                logger.info(f"✅ OK: {updated_count} folhas salariais consolidadas.\n")
+            else:
+                logger.info(f"ℹ️ Nenhum dado novo a salvar.\n")
+
+        except Exception as e:
+            logger.error(f"❌ Erro de extração em {sport_key}: {e}")
+            await asyncio.sleep(5)
 
     async def run(self):
-        logger.info("=== INICIANDO EXTRATOR FINANCEIRO S-TIER (GHOST MONITOR) ===")
+        from datetime import datetime
+        
+        logger.info("==================================================================")
+        logger.info(" 💰 INICIANDO EXTRATOR FINANCEIRO S-TIER (TEMPORADA ATUAL) ")
+        logger.info("==================================================================")
         await db.connect()
         await entity_resolver.load_mappings_from_db()
         
-        for year in range(self.start_year, self.end_year + 1):
-            logger.info(f"\n--- PROCESSANDO TEMPORADA {year} ---")
-            for sport_key in self.league_config.keys():
-                await self.process_season(sport_key, year)
-                
-        if self.browser:
-            self.browser.stop()
+        now = datetime.now()
+        
+        for sport_key, config in self.league_config.items():
+            is_cross = config["cross"]
             
+            # Lógica inteligente de calendário
+            if is_cross and now.month < 8:
+                current_year = now.year - 1
+            else:
+                current_year = now.year
+                
+            await self.process_season(sport_key, current_year)
+            # Respiro defensivo contra bans de IP do FBref
+            await asyncio.sleep(random.uniform(3.0, 6.0)) 
+                
         await db.disconnect()
-        logger.info("=== HISTORICO FINANCEIRO CONCLUIDO ===")
+        logger.info("=== EXTRAÇÃO FINANCEIRA CONCLUÍDA ===")
 
 if __name__ == "__main__":
-    updater = FBrefWagesUpdater()
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    asyncio.run(updater.run())
+    asyncio.run(FBrefWagesUpdater().run())

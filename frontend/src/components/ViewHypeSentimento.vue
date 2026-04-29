@@ -263,10 +263,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { io } from 'socket.io-client';
 import draggable from 'vuedraggable';
-import { 
-  Users, Zap, GripHorizontal, ArrowLeftRight, MessageSquare, 
-  Flame, Focus, Plus, Radio, Link
-} from 'lucide-vue-next';
+import { Rss, Users, Zap, GripHorizontal, ArrowLeftRight, 
+  MessageSquare, Flame, Focus, Plus, Radio, Link } from 'lucide-vue-next';
 import WidgetCard from './WidgetCard.vue';
 import axios from 'axios';
 

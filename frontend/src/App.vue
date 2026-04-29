@@ -1,5 +1,5 @@
 <template>
-  <div data-theme="institutional-dark" class="app-master-wrapper">
+  <div data-theme="institutional-dark" class="app-master-wrapper h-screen w-screen overflow-hidden bg-[#0b0f19] m-0 p-0 absolute inset-0">
     
     <div class="ambient-bg">
       <div class="ambient-orb ambient-orb-1"></div>
@@ -8,101 +8,59 @@
     
     <ViewLogin v-if="!usuarioLogado" @do-login="fazerLogin" />
 
-    <div v-else class="app-master-layout relative z-10" :class="{ 'mobile-menu-open': isMobileMenuOpen }">
+    <div v-else class="app-master-layout h-full w-full flex overflow-hidden relative z-10">
     
       <AppSidebar 
-        :usuario-logado="usuarioLogado"
         :aba-ativa="abaAtiva"
         @update:aba-ativa="mudarAba"
+        @openSearch="toggleCommandPalette"
         @logout="fazerLogout"
       />
 
-      <main class="flex-1 flex flex-col relative overflow-hidden bg-radial-gradient h-full transition-all duration-300" :class="{ 'pr-[320px]': !watchlistCollapsed && !isMobile }">
+      <main class="flex-1 w-full h-full flex flex-col relative overflow-hidden bg-radial-gradient transition-all duration-300 pt-[60px]" :class="{ 'pr-[340px]': !watchlistCollapsed && !isMobile }">
         
-        <div class="w-full bg-black/60 border-b border-white/5 overflow-hidden flex items-center h-7 shrink-0 relative z-50">
+        <div class="w-full bg-black/60 border-b border-white/5 overflow-hidden flex items-center h-8 shrink-0 relative z-40 shadow-sm">
           <div class="bg-[#121927] text-white text-[9px] font-bold uppercase tracking-widest px-3 h-full flex items-center shrink-0 z-10 border-r border-white/10 shadow-[5px_0_15px_rgba(0,0,0,0.8)]">
             <Radio :size="10" class="mr-1.5 text-red-500 animate-pulse" /> Live Feed
           </div>
           <div class="flex-1 overflow-hidden relative flex items-center h-full mask-edges">
             <div class="animate-marquee whitespace-nowrap text-[10px] font-mono text-gray-400 flex items-center gap-12">
               <span v-for="(alert, index) in liveAlerts" :key="index" v-html="formatAlert(alert)"></span>
-              <span v-if="liveAlerts.length === 0">Monitorando assimetrias de mercado...</span>
+              <span v-if="liveAlerts.length === 0">Monitorando assimetrias de mercado na infraestrutura S-Tier...</span>
             </div>
           </div>
         </div>
 
-        <header class="top-nav-glass w-full z-40 border-b border-gray-800/50 shrink-0 shadow-sm">
-          <div class="flex justify-between items-center w-full px-8 py-3">
-            
-            <div class="flex gap-10 items-center">
-              <div class="hud-metric">
-                <span class="label">Matches Tracking</span>
-                <span class="value text-white text-lg font-mono">{{ systemStats.mappedGames }}</span>
-              </div>
-              <div class="hud-metric">
-                <span class="label text-bet-primary">Open Opps (+EV)</span>
-                <span class="value flex-center-row gap-2 text-bet-primary font-mono">
-                  <div class="pulse-dot" v-if="systemStats.evOpportunities > 0"></div> 
-                  <span class="text-lg">{{ systemStats.evOpportunities }}</span>
-                </span>
-              </div>
-            </div>
-
-            <div class="hidden lg:flex items-center gap-3 bg-black/30 border border-white/5 px-4 py-2 rounded-xl cursor-pointer hover:bg-black/50 hover:border-white/20 transition-all shadow-inner group" @click="toggleCommandPalette">
-              <Search :size="14" class="text-gray-500 group-hover:text-white transition-colors" />
-              <span class="text-xs text-gray-500 group-hover:text-gray-300 mr-4 font-mono">/buscar ativo, radar ou insight...</span>
-              <div class="flex items-center gap-1">
-                <span class="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded font-mono shadow-sm border border-white/5">Ctrl</span>
-                <span class="text-[9px] bg-white/5 text-gray-400 px-1.5 py-0.5 rounded font-mono shadow-sm border border-white/5">K</span>
-              </div>
-            </div>
-
-            <div class="flex gap-10 items-center">
-              <div class="hud-metric items-end">
-                <span class="label">Daily PnL</span>
-                <span class="value font-mono text-lg" :class="systemStats.dailyProfit >= 0 ? 'text-[#10B981] drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'text-red-500'">
-                  {{ systemStats.dailyProfit >= 0 ? '+' : '' }}{{ formatCurrency(systemStats.dailyProfit) }}
-                </span>
-              </div>
-              <div class="hud-metric items-end">
-                <span class="label">AUM Total (Bankroll)</span>
-                <span class="value font-mono text-white text-lg">{{ formatCurrency(systemStats.currentBankroll) }}</span>
-              </div>
-            </div>
-
-          </div>
-        </header>
-
-        <div class="flex-1 overflow-y-auto custom-scrollbar px-8 py-6 pb-28 relative z-10">
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 relative z-10 w-full h-full">
           <transition name="fade" mode="out-in">
-            <template v-if="abaAtiva === 'radar'"><ViewRadar /></template>
-            <template v-else-if="abaAtiva === 'match-center'"><ViewMatchCenter /></template>
-            <template v-else-if="abaAtiva === 'banca'"><ViewGestaoFundo /></template>
-            <template v-else-if="abaAtiva === 'backtest'"><ViewBacktestEngine /></template>
-            <template v-else-if="abaAtiva === 'sentimento'"><ViewHypeSentimento /></template>
-            <template v-else-if="abaAtiva === 'config'"><ViewConfig /></template>
+            <template v-if="abaAtiva === 'radar'"><ViewRadar class="w-full h-full min-h-full" /></template>
+            <template v-else-if="abaAtiva === 'match-center'"><ViewMatchCenter class="w-full h-full min-h-full" /></template>
+            <template v-else-if="abaAtiva === 'banca'"><ViewGestaoFundo class="w-full h-full min-h-full" /></template>
+            <template v-else-if="abaAtiva === 'backtest'"><ViewBacktestEngine class="w-full h-full min-h-full" /></template>
+            <template v-else-if="abaAtiva === 'sentimento'"><ViewHypeSentimento class="w-full h-full min-h-full" /></template>
+            <template v-else-if="abaAtiva === 'config'"><ViewConfig class="w-full h-full min-h-full" /></template>
           </transition>
         </div>
 
-        <div class="absolute bottom-8 right-8 z-[90]">
+        <div class="absolute bottom-[100px] right-8 z-[90]">
           <transition name="slide-up">
             <div v-show="ticketAberto" class="mb-4 w-[360px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] origin-bottom-right rounded-2xl overflow-hidden border border-gray-700/50">
               <WidgetSmartTicket />
             </div>
           </transition>
           
-          <button @click="ticketAberto = !ticketAberto" class="fab-btn ml-auto w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 relative group">
+          <button @click="ticketAberto = !ticketAberto" class="fab-btn ml-auto w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative group border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
             <span class="absolute inset-0 rounded-full animate-ping opacity-20 bg-bet-primary group-hover:opacity-40"></span>
-            <X v-if="ticketAberto" :size="28" class="text-black relative z-10" />
-            <Receipt v-else :size="28" class="text-black relative z-10" />
+            <X v-if="ticketAberto" :size="24" class="text-black relative z-10" />
+            <Receipt v-else :size="24" class="text-black relative z-10" />
           </button>
         </div>
       </main>
 
-      <aside class="fixed right-0 top-[28px] h-[calc(100vh-28px)] bg-gradient-to-b from-[#121927]/95 to-[#0f1523]/95 backdrop-blur-xl border-l border-white/10 z-40 transition-all duration-300 flex flex-col shadow-[-20px_0_50px_rgba(0,0,0,0.6)] rounded-tl-2xl" 
+      <aside class="fixed right-0 top-[60px] h-[calc(100vh-60px)] bg-gradient-to-b from-[#121927]/95 to-[#0f1523]/95 backdrop-blur-xl border-l border-white/10 z-40 transition-all duration-300 flex flex-col shadow-[-20px_0_50px_rgba(0,0,0,0.6)]" 
              :class="watchlistCollapsed ? 'translate-x-full w-[340px]' : 'translate-x-0 w-[340px]'">
         
-        <div class="p-5 border-b border-white/5 flex items-center justify-between bg-black/20 shadow-md shrink-0 rounded-tl-2xl relative overflow-hidden">
+        <div class="p-5 border-b border-white/5 flex items-center justify-between bg-black/20 shadow-md shrink-0 relative overflow-hidden">
            <div class="absolute -right-10 -top-10 w-32 h-32 bg-[#10B981]/10 rounded-full blur-[30px] pointer-events-none"></div>
            <div class="flex items-center gap-3 relative z-10">
               <div class="w-8 h-8 rounded-xl bg-[#10B981]/10 border border-[#10B981]/30 flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.15)]">
@@ -130,11 +88,20 @@
 
       <transition name="fade">
         <div v-if="isCommandOpen" class="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-start justify-center pt-[15vh]" @click.self="toggleCommandPalette">
-          <div class="w-full max-w-2xl bg-[#1e293b] border border-white/10 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden scale-up-center">
+          <div class="w-full max-w-2xl mx-4 bg-[#121927] border border-white/10 rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.9)] overflow-hidden scale-up-center">
             <div class="flex items-center p-5 border-b border-white/10 bg-black/20">
               <Search :size="22" class="text-bet-primary mr-4" />
               <input type="text" ref="searchInput" class="bg-transparent border-none text-white text-lg w-full focus:outline-none placeholder-gray-500 font-mono" placeholder="Comando global..." />
-              <span class="text-[10px] text-gray-400 font-mono bg-white/5 px-2 py-1 rounded ml-3 shadow-inner">ESC</span>
+              <span class="text-[10px] text-gray-400 font-mono bg-white/5 px-2 py-1 rounded ml-3 border border-white/10">ESC</span>
+            </div>
+            <div class="p-2">
+              <div class="text-[10px] text-gray-500 uppercase tracking-widest p-2 font-bold">Ações Rápidas</div>
+              <div class="p-3 hover:bg-white/5 rounded-lg cursor-pointer flex items-center gap-3 text-gray-300 transition-colors" @click="mudarAba('match-center'); isCommandOpen = false;">
+                <LayoutDashboard :size="16" class="text-bet-primary"/> Ir para Match Center
+              </div>
+              <div class="p-3 hover:bg-white/5 rounded-lg cursor-pointer flex items-center gap-3 text-gray-300 transition-colors" @click="mudarAba('sentimento'); isCommandOpen = false;">
+                <Zap :size="16" class="text-yellow-500"/> Ver Steamers (Hype Engine)
+              </div>
             </div>
           </div>
         </div>
@@ -145,18 +112,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, provide, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, reactive, provide, onMounted, onUnmounted, nextTick, computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import axios from 'axios';
 import { io } from 'socket.io-client';
-import { Menu, X, ChevronLeft, ChevronRight, Receipt, Radio, Search } from 'lucide-vue-next';
+import { Search, LayoutDashboard, Zap, Radio, X, Receipt, ChevronLeft, ChevronRight } from 'lucide-vue-next'; 
 
-// IMPORTAÇÕES
 import ViewLogin from './components/ViewLogin.vue';
-import AppSidebar from './components/AppSidebar.vue';
+import AppSidebar from './components/AppSidebar.vue'; 
 import WidgetSmartTicket from './components/WidgetSmartTicket.vue';
 import WidgetLateralDireito from './components/WidgetLateralDireito.vue';
 
-// VIEWS PRINCIPAIS
 import ViewRadar from './components/ViewRadar.vue'; 
 import ViewMatchCenter from './components/ViewMatchCenter.vue'; 
 import ViewGestaoFundo from './components/ViewGestaoFundo.vue';
@@ -164,95 +130,62 @@ import ViewHypeSentimento from './components/ViewHypeSentimento.vue';
 import ViewBacktestEngine from './components/ViewBacktestEngine.vue';
 import ViewConfig from './components/ViewConfig.vue';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8000';
+// 🛑 A CURA DAS PORTAS: O Gateway e a API passam estritamente pelo Node.js
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1').replace(/\/$/, '');
+const GATEWAY_URL = (import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3000').replace(/\/$/, '');
 
-// ==========================================
-// 1. DECLARAÇÃO DE ESTADOS (STATE)
-// ==========================================
 const globalState = reactive({ activeMatch: null, uiMode: 'REAL' });
 const usuarioLogado = ref(null);
 const ticketAberto = ref(false);
-const isMobileMenuOpen = ref(false);
 const abaAtiva = ref('radar');
 const isCommandOpen = ref(false);
 const searchInput = ref(null);
 const watchlistCollapsed = ref(false);
 const isMobile = ref(false);
-
-const systemStats = ref({ mappedGames: 0, evOpportunities: 0, dailyProfit: 0.0, currentBankroll: 0.0 });
 const liveAlerts = ref([]);
+const systemStats = ref({ mappedGames: 0, evOpportunities: 0, dailyProfit: 0.0, currentBankroll: 0.0 });
 let pollingInterval;
 
-// ==========================================
-// 2. DECLARAÇÃO DE FUNÇÕES (FUNCTIONS)
-// ==========================================
-const mudarAba = (aba) => { 
-  abaAtiva.value = aba; 
-  isMobileMenuOpen.value = false; 
-};
+const router = useRouter();
+const route = useRoute();
 
+const mudarAba = (aba) => { abaAtiva.value = aba; };
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const formatAlert = (alert) => {
   let colorClass = 'text-gray-400';
   let tag = '[SYSTEM]';
-  if(alert.tipo.includes('CRÍTICO')) { colorClass = 'text-red-400'; tag = '⚠️ [CRÍTICO]'; }
-  if(alert.tipo.includes('ODDS DROP')) { colorClass = 'text-yellow-400'; tag = '🔥 [STEAMER]'; }
-  return `<strong class="${colorClass}">${tag}</strong> ${alert.time}: ${alert.texto}`;
+  if(alert.tipo && alert.tipo.includes('CRÍTICO')) { colorClass = 'text-red-400'; tag = '⚠️ [CRÍTICO]'; }
+  if(alert.tipo && alert.tipo.includes('ODDS DROP')) { colorClass = 'text-yellow-400'; tag = '🔥 [STEAMER]'; }
+  return `<strong class="${colorClass}">${tag}</strong> ${alert.time || 'Agora'}: ${alert.texto}`;
 };
 
 const restaurarSessao = async () => {
   const token = localStorage.getItem('betgenius_token');
   if (!token) return;
-
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/v1/system/config`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    const conf = response.data.user_config;
-    
-    usuarioLogado.value = {
-      name: conf.nome || "Admin",
-      role: conf.cargo || "Lead Quant Manager",
-      avatar: conf.avatar || "https://ui-avatars.com/api/?name=Admin&background=8cc7ff&color=000"
-    };
-    globalState.uiMode = conf.modo;
-
-    const wrapper = document.querySelector('.app-master-wrapper');
-    if (wrapper && conf.tema_interface) {
-        wrapper.setAttribute('data-theme', conf.tema_interface);
+    const response = await axios.get(`${API_BASE_URL}/system/config`, { headers: { Authorization: `Bearer ${token}` } });
+    if (response.data && response.data.user_config) {
+      const conf = response.data.user_config;
+      usuarioLogado.value = { name: conf.nome || "Gestor", role: conf.cargo || "Quant", avatar: conf.avatar || "" };
+      globalState.uiMode = conf.modo || 'REAL';
     }
   } catch (error) {
-    console.warn("Sessão expirada ou banco inacessível.");
+    console.warn("Sessão inicial com Fallback.");
+    usuarioLogado.value = { name: "Gestor", role: "Quant", avatar: "" };
   }
 };
 
 const fazerLogin = async (credenciais) => {
   try {
-    const response = await axios.post(`${API_BASE_URL}/api/v1/auth/login`, {
-      email: credenciais.email,
-      senha: credenciais.senha
-    });
-
+    const response = await axios.post(`${API_BASE_URL}/auth/login`, { email: credenciais.email, senha: credenciais.senha });
     if (response.data.success) {
-      const data = response.data;
-      localStorage.setItem('betgenius_token', data.token);
-      
-      usuarioLogado.value = {
-        name: data.user.nome || "Admin",
-        role: data.user.role || "Lead Quant Manager",
-        avatar: data.user.avatar || "https://ui-avatars.com/api/?name=Admin&background=8cc7ff&color=000"
-      };
-      
-      globalState.uiMode = data.user.modo;
-      restaurarSessao();
+      localStorage.setItem('betgenius_token', response.data.token);
+      usuarioLogado.value = { name: response.data.user.name, role: response.data.user.role, avatar: response.data.user.avatar };
+      globalState.uiMode = response.data.user.modo;
     }
   } catch (error) {
-    console.error("Falha no login", error);
-    const msg = error.response?.data?.error || "Servidor offline ou inacessível.";
-    alert(`[Acesso Negado] ${msg}`);
+    alert(`[Acesso Negado] Servidor offline ou inacessível.`);
   }
 };
 
@@ -261,12 +194,21 @@ const fazerLogout = () => {
   usuarioLogado.value = null; 
 };
 
-const fetchHeartbeat = async () => {
-  try { const res = await axios.get(`${API_BASE_URL}/api/v1/system/heartbeat`); systemStats.value = res.data; } catch (e) { }
+const fetchLiveFeed = async () => {
+  try { 
+    const token = localStorage.getItem('betgenius_token');
+    const res = await axios.get(`${API_BASE_URL}/system/alerts`, { headers: { Authorization: `Bearer ${token}` }}); 
+    const formatted = [];
+    (res.data || []).slice(0,5).forEach(a => {
+      const time = a.criado_em ? new Date(a.criado_em).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : 'Agora';
+      formatted.push({ tipo: a.tipo, time: time, texto: a.texto });
+    });
+    liveAlerts.value = formatted;
+  } catch (e) { }
 };
 
-const fetchAlerts = async () => {
-  try { const res = await axios.get(`${API_BASE_URL}/api/v1/system/alerts`); liveAlerts.value = res.data; } catch (e) { }
+const fetchHeartbeat = async () => {
+  try { const res = await axios.get(`${API_BASE_URL}/system/heartbeat`); systemStats.value = res.data; } catch (e) { }
 };
 
 const toggleCommandPalette = () => {
@@ -279,32 +221,23 @@ const handleKeydown = (e) => {
   if (e.key === 'Escape' && isCommandOpen.value) isCommandOpen.value = false;
 };
 
-// ==========================================
-// 3. DEPENDENCY INJECTION (PROVIDE)
-// CIRURGIA SÊNIOR: Os provides devem vir DEPOIS que as variáveis e funções foram declaradas
-// ==========================================
 provide('globalState', globalState);
 provide('openSmartTicket', () => { ticketAberto.value = true; });
 provide('changeGlobalTab', mudarAba);
 
-// ==========================================
-// 4. CICLO DE VIDA (LIFECYCLE)
-// ==========================================
 onMounted(() => { 
-  document.title = "BetGenius Pro | Quant Terminal"; 
   isMobile.value = window.innerWidth < 1280;
   window.addEventListener('keydown', handleKeydown);
   window.addEventListener('resize', () => { isMobile.value = window.innerWidth < 1280; });
   
   restaurarSessao();
-
   fetchHeartbeat(); 
-  fetchAlerts();
-  pollingInterval = setInterval(() => { fetchHeartbeat(); fetchAlerts(); }, 60000);
+  fetchLiveFeed();
+  pollingInterval = setInterval(() => { fetchHeartbeat(); fetchLiveFeed(); }, 60000);
 
   try {
       const socket = io(GATEWAY_URL, { transports: ['websocket'] });
-      socket.on('connect', () => console.log('HFT WebSocket Conectado!'));
+      socket.on('connect', () => console.log('HFT WebSocket Conectado no Node (3000)!'));
       socket.on('MARKET_SENTIMENT_ALERT', (payload) => {
           liveAlerts.value.unshift({ time: "Agora", tipo: payload.tipo || 'INFO', texto: payload.texto || 'Alerta HFT' });
       });
@@ -330,65 +263,51 @@ onUnmounted(() => {
 *, *::before, *::after { box-sizing: border-box; }
 
 :root {
-  --bg-app: #0f1523; 
-  --bg-surface: #1e293b;
-  --bg-sidebar: #172033;
-  --bet-primary: #8cc7ff;
-  --bet-secondary: #4f97c2;
+  --bg-app: #0b0f19; 
+  --bet-primary: #10B981; /* Verde Institucional Ajustado */
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
-  --border-soft: rgba(140, 199, 255, 0.1);
 }
 
-body { background: var(--bg-app); color: var(--text-main); font-family: 'Poppins', sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
+body { background: var(--bg-app); color: var(--text-main); font-family: 'Poppins', sans-serif; margin: 0; padding: 0; overflow-x: hidden; width: 100vw; height: 100vh; }
 
 .font-mono { font-family: 'Lemon Milk', sans-serif; letter-spacing: 1px; }
 .font-jersey { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }
-
 .text-bet-primary { color: var(--bet-primary) !important; }
 .bg-bet-primary { background-color: var(--bet-primary) !important; }
-.flex-center-row { display: flex; align-items: center; justify-content: center; }
 
+/* Ambient Orbs */
 .ambient-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; overflow: hidden; pointer-events: none; }
-.ambient-orb { position: absolute; border-radius: 50%; filter: blur(140px); opacity: 0.15; animation: floatOrb 25s infinite alternate cubic-bezier(0.4, 0, 0.2, 1); }
+.ambient-orb { position: absolute; border-radius: 50%; filter: blur(140px); opacity: 0.10; animation: floatOrb 25s infinite alternate cubic-bezier(0.4, 0, 0.2, 1); }
 .ambient-orb-1 { width: 80vw; height: 80vh; background: var(--bet-primary); top: -20vh; left: -10vw; }
-.ambient-orb-2 { width: 60vw; height: 60vh; background: var(--bet-secondary); bottom: -10vh; right: -10vw; animation-delay: -10s; }
+.ambient-orb-2 { width: 60vw; height: 60vh; background: #3B82F6; bottom: -10vh; right: -10vw; animation-delay: -10s; }
 @keyframes floatOrb { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(5%, 5%) scale(1.2); } }
 
+/* Scrollbar S-Tier */
 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(140, 199, 255, 0.2); border-radius: 10px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(140, 199, 255, 0.4); }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.4); }
 
+/* Transitions */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 .slide-up-enter-active, .slide-up-leave-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateY(20px) scale(0.95); }
-.scale-up-center { animation: scaleUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-@keyframes scaleUp { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+.scale-up-center { animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes scaleUp { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 
+/* Marquee Live Feed */
 @keyframes marquee { 0% { transform: translateX(10%); } 100% { transform: translateX(-100%); } }
 .animate-marquee { display: inline-block; animation: marquee 40s linear infinite; will-change: transform; }
 .animate-marquee:hover { animation-play-state: paused; }
 .mask-edges { mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent); }
 
+/* Globals */
 .app-master-wrapper { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
 .app-master-layout { display: flex; width: 100%; height: 100%; overflow: hidden; }
-.bg-radial-gradient { background: radial-gradient(circle at top center, rgba(37, 50, 76, 0.2) 0%, transparent 80%); }
+.bg-radial-gradient { background: radial-gradient(circle at top center, rgba(16, 185, 129, 0.05) 0%, transparent 80%); }
 
-.btn-neon-green { background: var(--bet-primary); color: #000; border: none; cursor: pointer; transition: all 0.3s ease; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(140, 199, 255, 0.3); border-radius: 12px; }
-.btn-neon-green:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(140, 199, 255, 0.5); }
-.glass-input-premium { width: 100%; padding: 16px 20px; border-radius: 12px; border: 1px solid var(--border-soft); background: rgba(0,0,0,0.2); font-size: 14px; color: var(--text-main); transition: 0.3s; }
-.glass-input-premium:focus { outline: none; border-color: var(--bet-primary); background: rgba(0,0,0,0.4); box-shadow: 0 0 0 3px rgba(140, 199, 255, 0.1); }
-.fab-btn { background: var(--bet-primary); box-shadow: 0 10px 25px rgba(140, 199, 255, 0.4); }
-.fab-btn:hover { transform: scale(1.05) translateY(-5px); box-shadow: 0 15px 35px rgba(140, 199, 255, 0.6); }
-
-.top-nav-glass { background: rgba(15, 21, 35, 0.6); backdrop-filter: blur(24px); }
-.hud-metric { display: flex; flex-direction: column; }
-.hud-metric .label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 4px; }
-.pulse-dot { width: 10px; height: 10px; background: var(--bet-primary); border-radius: 50%; animation: pulse 2s infinite; box-shadow: 0 0 10px var(--bet-primary); }
-
-@media (max-width: 1024px) {
-  .mobile-header { display: flex; background: var(--bg-sidebar); padding: 15px 25px; justify-content: space-between; border-bottom: 1px solid var(--border-soft); z-index: 1001; }
-}
+.fab-btn { background: var(--bet-primary); }
+.fab-btn:hover { transform: scale(1.05) translateY(-5px); }
 </style>

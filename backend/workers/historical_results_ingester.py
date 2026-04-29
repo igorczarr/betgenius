@@ -23,8 +23,8 @@ class HistoricalResultsIngester:
     normaliza nomes, imputa médias em dados faltantes e injeta Closing Odds (1x2, O/U, BTTS) e Árbitros no Data Warehouse.
     """
     def __init__(self):
-        self.start_year = 15 # 2015
-        self.end_year = 23   # 2023
+        self.start_year = 25 # 2015
+           # 2023
         
         # Mapa Global: Vincula nossas chaves internas aos códigos do football-data.co.uk
         self.league_map = {
