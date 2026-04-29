@@ -1,9 +1,10 @@
 <template>
-  <div data-theme="institutional-dark" class="app-master-wrapper h-screen w-screen overflow-hidden bg-[#0b0f19] m-0 p-0 absolute inset-0">
+  <div data-theme="institutional-dark" class="app-master-wrapper h-screen w-screen overflow-hidden bg-[#0b0f19] m-0 p-0 absolute inset-0 font-sans">
     
     <div class="ambient-bg">
       <div class="ambient-orb ambient-orb-1"></div>
       <div class="ambient-orb ambient-orb-2"></div>
+      <div class="absolute inset-0 bg-noise opacity-[0.03] mix-blend-overlay pointer-events-none"></div>
     </div>
     
     <ViewLogin v-if="!usuarioLogado" @do-login="fazerLogin" />
@@ -17,22 +18,25 @@
         @logout="fazerLogout"
       />
 
-      <main class="flex-1 w-full h-full flex flex-col relative overflow-hidden bg-radial-gradient transition-all duration-300 pt-[60px]" :class="{ 'pr-[340px]': !watchlistCollapsed && !isMobile }">
+      <main class="flex-1 w-full h-full flex flex-col relative overflow-hidden bg-radial-gradient transition-all duration-500 pt-[60px]" :class="{ 'pr-[340px]': !watchlistCollapsed && !isMobile }">
         
-        <div class="w-full bg-black/60 border-b border-white/5 overflow-hidden flex items-center h-8 shrink-0 relative z-40 shadow-sm">
-          <div class="bg-[#121927] text-white text-[9px] font-bold uppercase tracking-widest px-3 h-full flex items-center shrink-0 z-10 border-r border-white/10 shadow-[5px_0_15px_rgba(0,0,0,0.8)]">
-            <Radio :size="10" class="mr-1.5 text-red-500 animate-pulse" /> Live Feed
+        <div class="w-full bg-black/40 backdrop-blur-md border-b border-white/5 overflow-hidden flex items-center h-8 shrink-0 relative z-40 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+          <div class="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#10B981]/20 to-transparent"></div>
+          
+          <div class="bg-gradient-to-r from-[#0b0f19] to-[#121927] text-white text-[9px] font-bold uppercase tracking-[0.2em] px-4 h-full flex items-center shrink-0 z-20 border-r border-white/5 shadow-[10px_0_20px_rgba(0,0,0,0.8)]">
+            <Radio :size="10" class="mr-2 text-[#10B981] animate-pulse" /> Live Feed
           </div>
-          <div class="flex-1 overflow-hidden relative flex items-center h-full mask-edges">
-            <div class="animate-marquee whitespace-nowrap text-[10px] font-mono text-gray-400 flex items-center gap-12">
-              <span v-for="(alert, index) in liveAlerts" :key="index" v-html="formatAlert(alert)"></span>
-              <span v-if="liveAlerts.length === 0">Monitorando assimetrias de mercado na infraestrutura S-Tier...</span>
+          
+          <div class="flex-1 overflow-hidden relative flex items-center h-full mask-edges z-10">
+            <div class="animate-marquee whitespace-nowrap text-[10px] font-mono text-gray-400 flex items-center gap-16">
+              <span v-for="(alert, index) in liveAlerts" :key="index" v-html="formatAlert(alert)" class="hover:text-white transition-colors cursor-default"></span>
+              <span v-if="liveAlerts.length === 0" class="text-gray-500">Monitorando assimetrias de mercado na infraestrutura S-Tier...</span>
             </div>
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 relative z-10 w-full h-full">
-          <transition name="fade" mode="out-in">
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 pb-32 relative z-10 w-full h-full scroll-smooth">
+          <transition name="fade-scale" mode="out-in">
             <template v-if="abaAtiva === 'radar'"><ViewRadar class="w-full h-full min-h-full" /></template>
             <template v-else-if="abaAtiva === 'match-center'"><ViewMatchCenter class="w-full h-full min-h-full" /></template>
             <template v-else-if="abaAtiva === 'banca'"><ViewGestaoFundo class="w-full h-full min-h-full" /></template>
@@ -42,65 +46,69 @@
           </transition>
         </div>
 
-        <div class="absolute bottom-[100px] right-8 z-[90]">
+        <div class="absolute bottom-8 right-8 z-[90] flex flex-col items-end gap-4">
           <transition name="slide-up">
-            <div v-show="ticketAberto" class="mb-4 w-[360px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] origin-bottom-right rounded-2xl overflow-hidden border border-gray-700/50">
+            <div v-show="ticketAberto" class="w-[360px] shadow-[0_30px_60px_rgba(0,0,0,0.9)] origin-bottom-right rounded-2xl overflow-hidden border border-white/10 bg-[#0b0f19]/95 backdrop-blur-3xl">
               <WidgetSmartTicket />
             </div>
           </transition>
           
-          <button @click="ticketAberto = !ticketAberto" class="fab-btn ml-auto w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative group border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
-            <span class="absolute inset-0 rounded-full animate-ping opacity-20 bg-bet-primary group-hover:opacity-40"></span>
-            <X v-if="ticketAberto" :size="24" class="text-black relative z-10" />
-            <Receipt v-else :size="24" class="text-black relative z-10" />
+          <button @click="ticketAberto = !ticketAberto" class="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 relative group bg-black/40 backdrop-blur-xl border border-white/10 text-gray-400 hover:text-white shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:border-[#10B981]/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:-translate-y-1">
+            <X v-if="ticketAberto" :size="20" class="relative z-10 transition-transform duration-300 rotate-90 group-hover:rotate-0" />
+            <Receipt v-else :size="20" class="relative z-10 transition-transform duration-300 group-hover:scale-110" />
           </button>
         </div>
       </main>
 
-      <aside class="fixed right-0 top-[60px] h-[calc(100vh-60px)] bg-gradient-to-b from-[#121927]/95 to-[#0f1523]/95 backdrop-blur-xl border-l border-white/10 z-40 transition-all duration-300 flex flex-col shadow-[-20px_0_50px_rgba(0,0,0,0.6)]" 
+      <aside class="fixed right-0 top-[60px] h-[calc(100vh-60px)] bg-gradient-to-b from-[#0b0f19]/95 to-[#121927]/95 backdrop-blur-2xl border-l border-white/5 z-40 transition-all duration-500 flex flex-col shadow-[-30px_0_60px_rgba(0,0,0,0.8)]" 
              :class="watchlistCollapsed ? 'translate-x-full w-[340px]' : 'translate-x-0 w-[340px]'">
         
-        <div class="p-5 border-b border-white/5 flex items-center justify-between bg-black/20 shadow-md shrink-0 relative overflow-hidden">
-           <div class="absolute -right-10 -top-10 w-32 h-32 bg-[#10B981]/10 rounded-full blur-[30px] pointer-events-none"></div>
+        <div class="p-5 border-b border-white/5 flex items-center justify-between bg-black/20 shrink-0 relative overflow-hidden">
+           <div class="absolute -right-10 -top-10 w-32 h-32 bg-[#10B981]/10 rounded-full blur-[40px] pointer-events-none"></div>
            <div class="flex items-center gap-3 relative z-10">
-              <div class="w-8 h-8 rounded-xl bg-[#10B981]/10 border border-[#10B981]/30 flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.15)]">
-                <div class="w-2 h-2 bg-[#10B981] rounded-full animate-pulse shadow-[0_0_8px_#10B981]"></div>
+              <div class="w-8 h-8 rounded-xl bg-[#10B981]/10 border border-[#10B981]/30 flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                <div class="w-1.5 h-1.5 bg-[#10B981] rounded-full animate-pulse shadow-[0_0_8px_#10B981]"></div>
               </div>
               <div class="flex flex-col">
-                <span class="text-xs uppercase font-bold text-white tracking-widest font-mono drop-shadow-md">Watchlist</span>
-                <span class="text-[8px] text-gray-400 uppercase tracking-widest mt-0.5">Radar e Streaks</span>
+                <span class="text-xs uppercase font-bold text-white tracking-[0.2em] font-mono drop-shadow-md">Watchlist</span>
+                <span class="text-[8px] text-gray-500 uppercase tracking-widest mt-0.5">Radar e Streaks</span>
               </div>
            </div>
         </div>
 
         <div class="flex-1 overflow-y-auto custom-scrollbar p-5 flex flex-col gap-4">
-          <div class="bg-black/30 border border-white/5 rounded-2xl flex-1 flex flex-col overflow-hidden shadow-inner relative">
+          <div class="bg-black/20 border border-white/5 rounded-2xl flex-1 flex flex-col overflow-hidden shadow-inner relative">
              <WidgetLateralDireito class="w-full h-full" />
           </div>
         </div>
       </aside>
 
       <button @click="watchlistCollapsed = !watchlistCollapsed" 
-              class="fixed right-0 top-1/2 -translate-y-1/2 w-6 h-20 bg-gradient-to-b from-[#121927] to-[#0f1523] border border-r-0 border-white/10 rounded-l-xl flex items-center justify-center z-50 text-gray-500 hover:text-white hover:bg-black transition-all shadow-[-8px_0_20px_rgba(0,0,0,0.5)] hidden xl:flex hover:w-8 group">
-        <ChevronLeft v-if="watchlistCollapsed" size="16" class="group-hover:scale-110 transition-transform" />
-        <ChevronRight v-else size="16" class="group-hover:scale-110 transition-transform" />
+              class="fixed right-0 top-1/2 -translate-y-1/2 w-5 h-24 bg-black/40 backdrop-blur-md border border-r-0 border-white/10 rounded-l-xl flex items-center justify-center z-50 text-gray-500 hover:text-white hover:bg-black/80 hover:w-8 hover:border-[#10B981]/50 transition-all duration-300 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] hidden xl:flex group">
+        <ChevronLeft v-if="watchlistCollapsed" size="14" class="group-hover:scale-125 transition-transform" />
+        <ChevronRight v-else size="14" class="group-hover:scale-125 transition-transform" />
       </button>
 
-      <transition name="fade">
-        <div v-if="isCommandOpen" class="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-start justify-center pt-[15vh]" @click.self="toggleCommandPalette">
-          <div class="w-full max-w-2xl mx-4 bg-[#121927] border border-white/10 rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.9)] overflow-hidden scale-up-center">
-            <div class="flex items-center p-5 border-b border-white/10 bg-black/20">
-              <Search :size="22" class="text-bet-primary mr-4" />
-              <input type="text" ref="searchInput" class="bg-transparent border-none text-white text-lg w-full focus:outline-none placeholder-gray-500 font-mono" placeholder="Comando global..." />
-              <span class="text-[10px] text-gray-400 font-mono bg-white/5 px-2 py-1 rounded ml-3 border border-white/10">ESC</span>
+      <transition name="fade-backdrop">
+        <div v-if="isCommandOpen" class="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-[8px] flex items-start justify-center pt-[15vh]" @click.self="toggleCommandPalette">
+          <div class="w-full max-w-2xl mx-4 bg-[#0b0f19]/90 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_40px_100px_rgba(0,0,0,0.9)] overflow-hidden scale-up-center relative">
+            <div class="absolute inset-0 bg-gradient-to-b from-[#10B981]/5 to-transparent pointer-events-none"></div>
+            
+            <div class="flex items-center p-5 border-b border-white/10 bg-black/40 relative z-10">
+              <Search :size="22" class="text-[#10B981] mr-4" />
+              <input type="text" ref="searchInput" class="bg-transparent border-none text-white text-lg w-full focus:outline-none placeholder-gray-600 font-mono" placeholder="Comando global..." />
+              <span class="text-[9px] text-gray-400 font-mono bg-white/5 px-2 py-1 rounded-md ml-3 border border-white/10 uppercase font-bold tracking-widest shadow-inner">ESC</span>
             </div>
-            <div class="p-2">
-              <div class="text-[10px] text-gray-500 uppercase tracking-widest p-2 font-bold">Ações Rápidas</div>
-              <div class="p-3 hover:bg-white/5 rounded-lg cursor-pointer flex items-center gap-3 text-gray-300 transition-colors" @click="mudarAba('match-center'); isCommandOpen = false;">
-                <LayoutDashboard :size="16" class="text-bet-primary"/> Ir para Match Center
+            
+            <div class="p-3 relative z-10 bg-[#121927]/50">
+              <div class="text-[9px] text-gray-500 uppercase tracking-widest p-2 font-bold mb-1">Ações Rápidas</div>
+              <div class="p-4 hover:bg-white/[0.04] rounded-xl cursor-pointer flex items-center gap-4 text-gray-300 transition-all hover:translate-x-1 group" @click="mudarAba('match-center'); isCommandOpen = false;">
+                <div class="bg-black/50 p-2 rounded-lg border border-white/5 group-hover:border-[#10B981]/30 transition-colors"><LayoutDashboard :size="16" class="text-[#10B981]"/></div>
+                <span class="font-mono text-sm">Ir para Match Center</span>
               </div>
-              <div class="p-3 hover:bg-white/5 rounded-lg cursor-pointer flex items-center gap-3 text-gray-300 transition-colors" @click="mudarAba('sentimento'); isCommandOpen = false;">
-                <Zap :size="16" class="text-yellow-500"/> Ver Steamers (Hype Engine)
+              <div class="p-4 hover:bg-white/[0.04] rounded-xl cursor-pointer flex items-center gap-4 text-gray-300 transition-all hover:translate-x-1 group" @click="mudarAba('sentimento'); isCommandOpen = false;">
+                <div class="bg-black/50 p-2 rounded-lg border border-white/5 group-hover:border-yellow-500/30 transition-colors"><Zap :size="16" class="text-yellow-500"/></div>
+                <span class="font-mono text-sm">Ver Steamers (Hype Engine)</span>
               </div>
             </div>
           </div>
@@ -112,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, provide, onMounted, onUnmounted, nextTick, computed } from 'vue';
+import { ref, reactive, provide, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import axios from 'axios';
 import { io } from 'socket.io-client';
@@ -130,9 +138,10 @@ import ViewHypeSentimento from './components/ViewHypeSentimento.vue';
 import ViewBacktestEngine from './components/ViewBacktestEngine.vue';
 import ViewConfig from './components/ViewConfig.vue';
 
-// 🛑 A CURA DAS PORTAS: O Gateway e a API passam estritamente pelo Node.js
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1').replace(/\/$/, '');
-const GATEWAY_URL = (import.meta.env.VITE_GATEWAY_URL || 'http://localhost:3000').replace(/\/$/, '');
+// 🛑 A CURA DAS PORTAS (S-Tier)
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api/v1`;
+const GATEWAY_URL = (import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 const globalState = reactive({ activeMatch: null, uiMode: 'REAL' });
 const usuarioLogado = ref(null);
@@ -149,15 +158,38 @@ let pollingInterval;
 const router = useRouter();
 const route = useRoute();
 
-const mudarAba = (aba) => { abaAtiva.value = aba; };
+// Mapa de Títulos das Abas
+const abaTitulos = {
+  'radar': 'Radar',
+  'match-center': 'Match Center',
+  'banca': 'Gestão de Fundo',
+  'backtest': 'Backtest Engine',
+  'sentimento': 'Hype Sentimento',
+  'config': 'Configurações'
+};
+
+const atualizarTituloAba = (aba) => {
+  const titulo = abaTitulos[aba] || 'Home';
+  document.title = `BetGenius | ${titulo}`;
+};
+
+const mudarAba = (aba) => { 
+  abaAtiva.value = aba; 
+};
+
+// Monitora mudanças na abaAtiva para trocar o título do documento
+watch(abaAtiva, (newAba) => {
+  atualizarTituloAba(newAba);
+});
+
 const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const formatAlert = (alert) => {
   let colorClass = 'text-gray-400';
   let tag = '[SYSTEM]';
-  if(alert.tipo && alert.tipo.includes('CRÍTICO')) { colorClass = 'text-red-400'; tag = '⚠️ [CRÍTICO]'; }
-  if(alert.tipo && alert.tipo.includes('ODDS DROP')) { colorClass = 'text-yellow-400'; tag = '🔥 [STEAMER]'; }
-  return `<strong class="${colorClass}">${tag}</strong> ${alert.time || 'Agora'}: ${alert.texto}`;
+  if(alert.tipo && alert.tipo.includes('CRÍTICO')) { colorClass = 'text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]'; tag = '⚠️ [CRÍTICO]'; }
+  if(alert.tipo && alert.tipo.includes('ODDS DROP')) { colorClass = 'text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.5)]'; tag = '🔥 [STEAMER]'; }
+  return `<strong class="${colorClass}">${tag}</strong> ${alert.time || 'Agora'}: <span class="text-gray-300 ml-1">${alert.texto}</span>`;
 };
 
 const restaurarSessao = async () => {
@@ -183,6 +215,9 @@ const fazerLogin = async (credenciais) => {
       localStorage.setItem('betgenius_token', response.data.token);
       usuarioLogado.value = { name: response.data.user.name, role: response.data.user.role, avatar: response.data.user.avatar };
       globalState.uiMode = response.data.user.modo;
+      
+      // Dispara o gatilho da Matrix Mestra no Background silenciosamente
+      axios.post(`${API_BASE_URL}/system/sync-post-login`).catch(e => console.error("Sync Error", e));
     }
   } catch (error) {
     alert(`[Acesso Negado] Servidor offline ou inacessível.`);
@@ -230,6 +265,7 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeydown);
   window.addEventListener('resize', () => { isMobile.value = window.innerWidth < 1280; });
   
+  atualizarTituloAba(abaAtiva.value);
   restaurarSessao();
   fetchHeartbeat(); 
   fetchLiveFeed();
@@ -237,7 +273,7 @@ onMounted(() => {
 
   try {
       const socket = io(GATEWAY_URL, { transports: ['websocket'] });
-      socket.on('connect', () => console.log('HFT WebSocket Conectado no Node (3000)!'));
+      socket.on('connect', () => console.log(`[SOCKET] Conectado ao Gateway HFT: ${GATEWAY_URL}`));
       socket.on('MARKET_SENTIMENT_ALERT', (payload) => {
           liveAlerts.value.unshift({ time: "Agora", tipo: payload.tipo || 'INFO', texto: payload.texto || 'Alerta HFT' });
       });
@@ -264,7 +300,7 @@ onUnmounted(() => {
 
 :root {
   --bg-app: #0b0f19; 
-  --bet-primary: #10B981; /* Verde Institucional Ajustado */
+  --bet-primary: #10B981;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
 }
@@ -273,41 +309,41 @@ body { background: var(--bg-app); color: var(--text-main); font-family: 'Poppins
 
 .font-mono { font-family: 'Lemon Milk', sans-serif; letter-spacing: 1px; }
 .font-jersey { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }
-.text-bet-primary { color: var(--bet-primary) !important; }
-.bg-bet-primary { background-color: var(--bet-primary) !important; }
+
+/* Noise overlay for premium texture */
+.bg-noise { background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E'); }
 
 /* Ambient Orbs */
 .ambient-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; overflow: hidden; pointer-events: none; }
-.ambient-orb { position: absolute; border-radius: 50%; filter: blur(140px); opacity: 0.10; animation: floatOrb 25s infinite alternate cubic-bezier(0.4, 0, 0.2, 1); }
-.ambient-orb-1 { width: 80vw; height: 80vh; background: var(--bet-primary); top: -20vh; left: -10vw; }
+.ambient-orb { position: absolute; border-radius: 50%; filter: blur(140px); opacity: 0.15; animation: floatOrb 25s infinite alternate cubic-bezier(0.4, 0, 0.2, 1); }
+.ambient-orb-1 { width: 80vw; height: 80vh; background: #10B981; top: -20vh; left: -10vw; }
 .ambient-orb-2 { width: 60vw; height: 60vh; background: #3B82F6; bottom: -10vh; right: -10vw; animation-delay: -10s; }
 @keyframes floatOrb { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(5%, 5%) scale(1.2); } }
 
 /* Scrollbar S-Tier */
-.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.4); }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.5); }
 
 /* Transitions */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-scale-enter-active, .fade-scale-leave-active { transition: opacity 0.4s ease, transform 0.4s ease; }
+.fade-scale-enter-from, .fade-scale-leave-to { opacity: 0; transform: scale(0.98); }
 .slide-up-enter-active, .slide-up-leave-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateY(20px) scale(0.95); }
 .scale-up-center { animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes scaleUp { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.fade-backdrop-enter-active, .fade-backdrop-leave-active { transition: opacity 0.3s ease; }
+.fade-backdrop-enter-from, .fade-backdrop-leave-to { opacity: 0; }
 
-/* Marquee Live Feed */
-@keyframes marquee { 0% { transform: translateX(10%); } 100% { transform: translateX(-100%); } }
-.animate-marquee { display: inline-block; animation: marquee 40s linear infinite; will-change: transform; }
+/* FIX: Marquee Live Feed (Starts right, ends left) */
+@keyframes marquee { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
+.animate-marquee { display: inline-block; animation: marquee 35s linear infinite; will-change: transform; padding-right: 50vw;}
 .animate-marquee:hover { animation-play-state: paused; }
-.mask-edges { mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent); }
+.mask-edges { mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent); }
 
 /* Globals */
 .app-master-wrapper { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
 .app-master-layout { display: flex; width: 100%; height: 100%; overflow: hidden; }
-.bg-radial-gradient { background: radial-gradient(circle at top center, rgba(16, 185, 129, 0.05) 0%, transparent 80%); }
-
-.fab-btn { background: var(--bet-primary); }
-.fab-btn:hover { transform: scale(1.05) translateY(-5px); }
+.bg-radial-gradient { background: radial-gradient(circle at top center, rgba(16, 185, 129, 0.03) 0%, transparent 80%); }
 </style>

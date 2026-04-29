@@ -21,3 +21,6 @@ apify-client==1.6.2
 soccerdata==1.9.0
 python-socketio==5.11.2
 aiohttp==3.9.5
+pyotp
+python-jose[cryptography]
+passlib[bcrypt]

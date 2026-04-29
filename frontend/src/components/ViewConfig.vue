@@ -49,7 +49,7 @@
         <Landmark size="14" /> Tesouraria Institucional
       </button>
       <button @click="abaAtiva = 'perfil'" class="px-6 py-2.5 text-xs uppercase tracking-widest font-bold rounded-lg transition-all flex items-center gap-2" :class="abaAtiva === 'perfil' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'">
-        <Fingerprint size="14" /> Perfil & Acesso
+        <Fingerprint size="14" /> Perfil & Segurança
       </button>
       <button @click="abaAtiva = 'visual'" class="px-6 py-2.5 text-xs uppercase tracking-widest font-bold rounded-lg transition-all flex items-center gap-2" :class="abaAtiva === 'visual' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'">
         <Image size="14" /> Temas & Login UI
@@ -180,13 +180,84 @@
             </div>
           </div>
 
-          <div class="border-t border-white/10 pt-6 flex flex-col gap-4">
-             <h3 class="text-sm font-bold text-red-400 uppercase tracking-widest flex items-center gap-2">
-              <KeyRound size="16" /> Modificar Chave de Acesso (Senha)
+          <div class="border-t border-white/10 pt-6 flex flex-col gap-6">
+            <h3 class="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
+              <LockKeyhole size="18" class="text-blue-400"/> Autenticação Passwordless (TOTP)
             </h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <input type="password" v-model="config.nova_senha" placeholder="Digite a nova senha..." class="bg-black/50 text-sm text-white border border-white/10 rounded-lg px-4 py-3 outline-none focus:border-red-500/50 transition-colors placeholder-gray-600" />
-               <span class="text-[10px] text-gray-500 font-mono my-auto pl-2">* Deixe em branco se não quiser alterar a senha atual.</span>
+            <p class="text-[11px] text-gray-400 leading-relaxed font-mono max-w-3xl -mt-2">
+              Substitua a sua chave estática por códigos temporais dinâmicos. O acesso passará a exigir exclusivamente a "senha viva" do seu Authenticator App (Google/Microsoft), anulando riscos de vazamento.
+            </p>
+
+            <div v-if="config.auth_mode === 'authenticator'" class="bg-[#10B981]/10 border border-[#10B981]/30 p-5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-[#10B981]/20 rounded-full flex items-center justify-center border border-[#10B981]/40 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <ShieldCheck size="24" class="text-[#10B981]" />
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-sm font-bold text-[#10B981] uppercase tracking-widest">Proteção Máxima Ativa</span>
+                  <span class="text-[10px] text-gray-400 font-mono mt-0.5">Sua conta exige token de 6 dígitos no login.</span>
+                </div>
+              </div>
+              <button @click="disableAuthenticator" class="text-[10px] bg-red-500/10 hover:bg-red-500 border border-red-500/30 text-red-400 hover:text-white font-bold uppercase tracking-widest px-4 py-2 rounded-lg transition-all shadow-sm whitespace-nowrap">
+                Reverter para Senha
+              </button>
+            </div>
+
+            <div v-else-if="!isSettingUpTotp" class="bg-black/30 border border-white/10 p-5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-black rounded-full flex items-center justify-center border border-white/10">
+                  <KeyRound size="20" class="text-gray-500" />
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-sm font-bold text-white uppercase tracking-widest">Modo Legado (Senha Fixa)</span>
+                  <span class="text-[10px] text-red-400 font-mono mt-0.5">Vulnerável a Phishing. Atualização recomendada.</span>
+                </div>
+              </div>
+              <button @click="startTotpSetup" class="text-[10px] bg-blue-500 text-black hover:bg-white font-bold uppercase tracking-widest px-6 py-2.5 rounded-lg transition-all shadow-[0_0_15px_rgba(59,130,246,0.4)] whitespace-nowrap">
+                Ativar Authenticator
+              </button>
+            </div>
+
+            <div v-if="isSettingUpTotp" class="border border-blue-500/30 bg-blue-500/5 p-6 rounded-2xl animate-fade-in">
+              <div class="flex items-center gap-2 mb-4">
+                <span class="w-6 h-6 rounded-full bg-blue-500 text-black font-bold flex items-center justify-center text-xs">1</span>
+                <span class="text-xs font-bold text-white uppercase tracking-widest">Escaneie o QR Code</span>
+              </div>
+              
+              <div class="flex flex-col md:flex-row gap-8 items-center bg-black/40 p-6 rounded-2xl border border-white/5">
+                <div class="bg-white p-3 rounded-xl shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+                  <img :src="`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setupData.qr_code_uri)}`" alt="QR Code" class="w-40 h-40" />
+                </div>
+                
+                <div class="flex flex-col flex-1 w-full text-center md:text-left">
+                  <span class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Ou insira o código manualmente:</span>
+                  <span class="text-lg font-mono text-bet-primary tracking-[0.2em] font-bold bg-[#121927] border border-white/10 px-4 py-2 rounded-lg select-all mb-4">{{ setupData.manual_entry_key }}</span>
+                  <p class="text-[10px] text-gray-400 leading-relaxed font-mono">Abra o seu App Authenticator, toque no "+" e escaneie o código de barras ao lado. O aplicativo irá gerar um token temporário.</p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 mt-8 mb-4">
+                <span class="w-6 h-6 rounded-full bg-blue-500 text-black font-bold flex items-center justify-center text-xs">2</span>
+                <span class="text-xs font-bold text-white uppercase tracking-widest">Valide o Dispositivo</span>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-4 bg-[#121927] p-4 rounded-xl border border-white/5 w-fit">
+                <input type="text" v-model="verificationCode" maxlength="6" class="bg-black/50 border border-white/20 text-white text-center text-2xl tracking-[0.5em] rounded-lg w-48 py-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono" placeholder="000000" />
+                <button @click="verifyAndEnableTotp" :disabled="verificationCode.length !== 6" class="bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-black font-bold uppercase tracking-widest text-[10px] px-6 py-4 rounded-lg transition-all shadow-md">
+                  Validar e Ativar
+                </button>
+                <button @click="isSettingUpTotp = false" class="text-gray-500 hover:text-red-400 text-xs font-mono uppercase transition-colors px-2">Cancelar</button>
+              </div>
+            </div>
+
+            <div v-if="!isSettingUpTotp && config.auth_mode !== 'authenticator'" class="mt-4 pt-6 border-t border-white/5">
+               <h3 class="text-sm font-bold text-red-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                <KeyRound size="16" /> Alterar Senha Legada
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <input type="password" v-model="config.nova_senha" placeholder="Digite a nova senha..." class="bg-black/50 text-sm text-white border border-white/10 rounded-lg px-4 py-3 outline-none focus:border-red-500/50 transition-colors placeholder-gray-600" />
+                 <span class="text-[10px] text-gray-500 font-mono my-auto pl-2">* Deixe em branco se não quiser alterar a senha atual.</span>
+              </div>
             </div>
           </div>
         </div>
@@ -248,14 +319,15 @@ import { ref, computed, onMounted, inject } from 'vue';
 import axios from 'axios';
 import { 
   Settings, Save, KeyRound, User, UploadCloud, Globe, BrainCircuit, Landmark, 
-  Briefcase, FlaskConical, ShieldCheck, Fingerprint, Palette, Cpu, Loader2, ArrowDownCircle, DollarSign,
-  CalendarClock, Image, Plus, Trash2, Info
+  Briefcase, FlaskConical, ShieldCheck, Fingerprint, Palette, Cpu, Loader2, DollarSign,
+  CalendarClock, Image, Plus, Trash2, Info, LockKeyhole
 } from 'lucide-vue-next';
 
 const globalState = inject('globalState');
 
-// Puxa a variável de ambiente da Vercel. Se não achar, usa o localhost de fallback.
-const API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/v1`;
+// 🛑 A CURA DAS PORTAS (MÓDULO DE CONFIGURAÇÃO)
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api/v1`;
 
 const abaAtiva = ref('tesouraria');
 const isLoading = ref(true);
@@ -264,6 +336,7 @@ const isProcessing = ref(false);
 const valorAporte = ref(null);
 
 const config = ref({
+  id: 1,
   modo: 'REAL',
   nivel_dominancia: 2,
   nome: '',
@@ -275,11 +348,16 @@ const config = ref({
   avatar: '',
   fonte: 'jersey',
   tema_interface: 'institutional-dark',
-  auth_method: 'standard'
+  auth_mode: 'password'
 });
 
 const tesouraria = ref({ banca_real: 0, banca_bench: 0, lucro_retido: 0 });
 const imagensLogin = ref([]);
+
+// Passwordless TOTP States
+const isSettingUpTotp = ref(false);
+const setupData = ref({ temp_secret: '', qr_code_uri: '', manual_entry_key: '' });
+const verificationCode = ref('');
 
 const getConfigHeaders = () => {
   const token = localStorage.getItem('betgenius_token');
@@ -290,17 +368,19 @@ const carregarDados = async () => {
   isLoading.value = true;
   try {
     const opts = getConfigHeaders();
-    // Cache-Buster para ignorar dados velhos
     const ts = new Date().getTime();
     
     const [resConfig, resTreasury] = await Promise.all([
-      axios.get(`${API_URL}/system/config?t=${ts}`, opts),
-      axios.get(`${API_URL}/fund/treasury?t=${ts}`, opts)
+      axios.get(`${API_URL}/system/config?t=${ts}`, opts).catch(() => ({data: {}})),
+      axios.get(`${API_URL}/fund/treasury?t=${ts}`, opts).catch(() => ({data: {}}))
     ]);
     
-    config.value = { ...config.value, ...resConfig.data.user_config };
+    if(resConfig.data && resConfig.data.user_config) {
+        config.value = { ...config.value, ...resConfig.data.user_config };
+    }
+    
     imagensLogin.value = resConfig.data.login_images || [];
-    tesouraria.value = resTreasury.data;
+    tesouraria.value = resTreasury.data || { banca_real: 0, banca_bench: 0, lucro_retido: 0 };
     
     const wrapper = document.querySelector('.app-master-wrapper') || document.documentElement;
     if (wrapper && config.value.tema_interface) {
@@ -341,6 +421,61 @@ const salvarConfiguracoes = async () => {
   }
 };
 
+// ==========================================
+// FUNÇÕES DO GOOGLE AUTHENTICATOR S-TIER
+// ==========================================
+const startTotpSetup = async () => {
+  try {
+    const res = await axios.post(`${API_URL}/system/setup-authenticator`, 
+      { user_id: config.value.id }, 
+      getConfigHeaders()
+    );
+    
+    setupData.value = res.data;
+    isSettingUpTotp.value = true;
+    verificationCode.value = '';
+  } catch(e) {
+    alert("Erro ao contatar a API de Segurança. Tente novamente.");
+  }
+};
+
+const verifyAndEnableTotp = async () => {
+  try {
+    const res = await axios.post(`${API_URL}/system/verify-and-enable-authenticator?temp_secret=${setupData.value.temp_secret}`, 
+      { user_id: config.value.id, totp_code: verificationCode.value }, 
+      getConfigHeaders()
+    );
+    
+    if(res.data.success) {
+      alert("Acesso Institucional Garantido! Da próxima vez que logar, insira o código de 6 dígitos no campo 'Chave de Acesso'.");
+      config.value.auth_mode = 'authenticator';
+      isSettingUpTotp.value = false;
+      salvarConfiguracoes(); // Força a gravação global
+    }
+  } catch(e) {
+    alert("Código Inválido ou Expirado. Tente o próximo código gerado pelo aplicativo.");
+    verificationCode.value = '';
+  }
+};
+
+const disableAuthenticator = async () => {
+  if(!confirm("Aviso S-Tier: Reverter para Senha Estática torna a sua conta vulnerável a phishing. Deseja prosseguir?")) return;
+  
+  try {
+    await axios.post(`${API_URL}/system/disable-authenticator`, 
+      { user_id: config.value.id }, 
+      getConfigHeaders()
+    );
+    
+    config.value.auth_mode = 'password';
+    alert("Authenticator desativado. Modo de senha restaurado.");
+    salvarConfiguracoes();
+  } catch(e) {
+    alert("Falha ao desativar. Verifique sua conexão.");
+  }
+};
+
+// Outras Ações do Componente
 const processarAporte = async () => {
   const val = parseFloat(valorAporte.value);
   if (!val || val <= 0) return;
@@ -351,7 +486,6 @@ const processarAporte = async () => {
     await carregarDados(); 
     valorAporte.value = null;
     
-    // FIX S-TIER: Recarrega a Placa-Mãe inteira para que o TopBar (App.vue) também pegue o novo valor!
     alert(`Aporte de R$ ${val.toFixed(2)} processado com sucesso! Sincronizando terminal...`);
     setTimeout(() => { window.location.reload(); }, 500);
     
@@ -428,4 +562,7 @@ onMounted(carregarDados);
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease, transform 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(10px); }
+
+.animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 </style>

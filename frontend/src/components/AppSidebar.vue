@@ -242,15 +242,18 @@ import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import { 
   Search, Bell, User, Activity, CheckCircle2, Shield, X, Flame,
-  LogOut, Settings, Camera, Target, Heart, Trophy, DollarSign,
-  LayoutDashboard, FlaskConical, TrendingUp, Check, ArrowRight, Zap, Info
+  LogOut, Settings, Target, Heart, Trophy, DollarSign,
+  LayoutDashboard, FlaskConical, TrendingUp, Check, Zap, Info
 } from 'lucide-vue-next';
 
 defineProps({ abaAtiva: { type: String, required: true } });
 const emit = defineEmits(['update:abaAtiva', 'logout', 'openSearch']);
 
-// Constante Blindada para garantir URL correta
-const API_URL = 'http://localhost:3000/api/v1';
+// 🛑 A CURA DAS PORTAS: Removemos o fallback rígido para localhost.
+// O import.meta.env será resolvido pelo Vite (Dev ou Prod)
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Garante o prefixo /api/v1 para evitar o erro 404
+const API_URL = rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api/v1`;
 
 // Estados de UI
 const isProfileOpen = ref(false);
@@ -262,7 +265,7 @@ const isEditingHeartTeam = ref(false);
 const tempLeague = ref('');
 const tempTeam = ref('');
 
-// Dados Base (Valores Seguros)
+// Dados Base
 const stats = ref({ mappedGames: 0, evOpportunities: 0, dailyProfit: 0.0, currentBankroll: 0.0 });
 const userConfig = ref({ nome: '', username: '', cargo: '', titulo: '', avatar: null, cover: null, modo: '', nivel_dominancia: 2, time_coracao: '' });
 const notificacoes = ref([]);
@@ -306,13 +309,21 @@ const salvarTimeCoracao = () => {
   }
 };
 
-// MOTOR DE NOTIFICAÇÕES (Tratamento Anti-Quebra S-Tier)
+// MOTOR DE NOTIFICAÇÕES (Tratamento S-Tier de Cache)
 const parseNotifications = (alertsData, ledgerData) => {
   let merged = [];
+  
+  // Puxa a data do último "Clear" feito pelo usuário (Persistência)
+  const lastReadTimestamp = parseInt(localStorage.getItem('betgenius_last_notif_read') || '0', 10);
   
   if (Array.isArray(alertsData)) {
     alertsData.forEach(a => {
       if (!a) return;
+      const notifTimestamp = a.criado_em ? new Date(a.criado_em).getTime() : new Date().getTime();
+      
+      // Se a notificação for mais velha que a data do último click "Marcar Lidas", ela não entra na lista.
+      if (notifTimestamp <= lastReadTimestamp) return;
+
       let icon = Info; 
       let colorClass = 'text-blue-400 bg-blue-500/10 border-blue-500/30';
       const tipoStr = String(a.tipo || '').toUpperCase();
@@ -320,32 +331,33 @@ const parseNotifications = (alertsData, ledgerData) => {
       if (tipoStr.includes('ODDS DROP')) { icon = Zap; colorClass = 'text-yellow-500 bg-yellow-500/10 border-yellow-500/30'; }
       if (tipoStr.includes('CRÍTICO') || tipoStr.includes('CRITICO')) { icon = Flame; colorClass = 'text-red-500 bg-red-500/10 border-red-500/30'; }
 
-      const timestamp = a.criado_em ? new Date(a.criado_em).getTime() : new Date().getTime();
-      const dateStr = new Date(timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+      const dateStr = new Date(notifTimestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
 
       merged.push({
         title: a.tipo || 'Alerta', time: dateStr, message: a.texto || '',
-        icon, colorClass, timestamp
+        icon, colorClass, timestamp: notifTimestamp
       });
     });
   }
 
   if (Array.isArray(ledgerData)) {
     ledgerData.forEach(l => {
-      if (l && l.status === 'WON') {
+      const settledTimestamp = l.settled_at ? new Date(l.settled_at).getTime() : new Date().getTime();
+      
+      if (l && l.status === 'WON' && settledTimestamp > lastReadTimestamp) {
         merged.push({
           title: '✅ LIQUIDAÇÃO POSITIVA (+EV)', 
           time: l.hora || 'Hoje',
           message: `SGP Vencedor em ${l.jogo || 'Partida'} (${l.mercado || '-'}). Lucro Creditado: R$ ${l.pnl || '0,00'}`,
           icon: Check, colorClass: 'text-[#10B981] bg-[#10B981]/10 border-[#10B981]/30',
-          timestamp: new Date().getTime() 
+          timestamp: settledTimestamp
         });
       }
     });
   }
 
   merged.sort((a, b) => b.timestamp - a.timestamp);
-  notificacoes.value = merged.slice(0, 15);
+  notificacoes.value = merged.slice(0, 15); // Limita às últimas 15 não lidas
   
   if (merged.length > 0 && !isNotifOpen.value) {
     unreadNotifs.value = merged.length;
@@ -353,7 +365,10 @@ const parseNotifications = (alertsData, ledgerData) => {
 };
 
 const marcarComoLidas = () => {
+  // Salva o momento exato em que o usuário limpou a caixa (Impede que o Loop traga alertas antigos)
+  localStorage.setItem('betgenius_last_notif_read', Date.now().toString());
   unreadNotifs.value = 0;
+  notificacoes.value = []; // Esvazia a UI
   isNotifOpen.value = false;
 };
 

@@ -55,7 +55,6 @@
       </div>
     </div>
 
-
     <div class="w-full lg:w-[45%] flex items-center justify-center relative bg-black">
       
       <div class="absolute inset-0 z-0 overflow-hidden">
@@ -86,19 +85,6 @@
 
         <form @submit.prevent="submitLogin" class="flex flex-col gap-5">
 
-          <div class="flex bg-black/40 p-1.5 rounded-xl border border-white/10 shadow-inner mb-2">
-            <button type="button" @click="authMode = 'password'" 
-                    class="flex-1 flex items-center justify-center gap-2 py-2 text-[10px] uppercase tracking-widest font-bold rounded-lg transition-all"
-                    :class="authMode === 'password' ? 'bg-white/10 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'">
-              <KeyRound size="14" /> Senha
-            </button>
-            <button type="button" @click="authMode = 'authenticator'" 
-                    class="flex-1 flex items-center justify-center gap-2 py-2 text-[10px] uppercase tracking-widest font-bold rounded-lg transition-all"
-                    :class="authMode === 'authenticator' ? 'bg-bet-primary/20 text-bet-primary shadow-sm border border-bet-primary/30' : 'text-gray-500 hover:text-gray-300'">
-              <Smartphone size="14" /> 2FA (Auth)
-            </button>
-          </div>
-
           <div class="flex flex-col gap-2 relative group">
             <label class="text-[10px] uppercase tracking-widest font-bold text-gray-400 group-focus-within:text-bet-primary transition-colors">ID do Gestor</label>
             <div class="relative">
@@ -111,44 +97,24 @@
             </div>
           </div>
 
-          <div class="relative min-h-[90px]">
-            <transition name="form-swap" mode="out-in">
-              
-              <div v-if="authMode === 'password'" class="flex flex-col gap-2 relative group" key="pwd">
-                <div class="flex justify-between items-center">
-                  <label class="text-[10px] uppercase tracking-widest font-bold text-gray-400 group-focus-within:text-bet-primary transition-colors">Chave de Acesso</label>
-                  <a href="#" class="text-[10px] text-gray-500 hover:text-white underline decoration-gray-700 underline-offset-2 transition-colors">Esqueci a chave</a>
-                </div>
-                <div class="relative">
-                  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <KeyRound size="16" class="text-gray-500 group-focus-within:text-bet-primary transition-colors" />
-                  </div>
-                  <input type="password" v-model="senha" :required="authMode === 'password'"
-                    class="w-full bg-black/50 border border-white/10 text-white text-sm rounded-xl pl-12 pr-4 py-4 outline-none focus:bg-black/80 focus:border-bet-primary/70 focus:ring-1 focus:ring-bet-primary/50 transition-all placeholder-gray-600 font-mono tracking-widest shadow-inner"
-                    placeholder="••••••••••••" />
-                </div>
+          <div class="flex flex-col gap-2 relative group">
+            <div class="flex justify-between items-center">
+              <label class="text-[10px] uppercase tracking-widest font-bold text-gray-400 group-focus-within:text-bet-primary transition-colors">Chave de Acesso (Senha ou Autenticador)</label>
+              <a href="#" class="text-[10px] text-gray-500 hover:text-white underline decoration-gray-700 underline-offset-2 transition-colors">Esqueci a chave</a>
+            </div>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <KeyRound size="16" class="text-gray-500 group-focus-within:text-bet-primary transition-colors" />
               </div>
-
-              <div v-else class="flex flex-col gap-2 relative group" key="auth">
-                <div class="flex justify-between items-center">
-                  <label class="text-[10px] uppercase tracking-widest font-bold text-gray-400 group-focus-within:text-bet-primary transition-colors">Token Authenticator</label>
-                </div>
-                <div class="relative">
-                  <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Smartphone size="16" class="text-gray-500 group-focus-within:text-bet-primary transition-colors" />
-                  </div>
-                  <input type="text" v-model="token2fa" :required="authMode === 'authenticator'" maxlength="6"
-                    class="w-full bg-black/50 border border-bet-primary/30 text-bet-primary text-center text-xl tracking-[0.5em] rounded-xl pl-12 pr-4 py-3 outline-none focus:bg-black/80 focus:border-bet-primary focus:ring-1 focus:ring-bet-primary/50 transition-all placeholder-bet-primary/30 font-mono shadow-inner"
-                    placeholder="000000" />
-                </div>
-              </div>
-
-            </transition>
+              <input type="password" v-model="senha" required autocomplete="current-password"
+                class="w-full bg-black/50 border border-white/10 text-white text-sm rounded-xl pl-12 pr-4 py-4 outline-none focus:bg-black/80 focus:border-bet-primary/70 focus:ring-1 focus:ring-bet-primary/50 transition-all placeholder-gray-600 font-mono tracking-widest shadow-inner"
+                placeholder="••••••••••••" />
+            </div>
           </div>
 
           <button type="submit" class="group relative w-full flex items-center justify-center gap-3 bg-bet-primary text-black font-bold uppercase tracking-widest text-xs py-4 rounded-xl mt-2 overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_10px_30px_rgba(140,199,255,0.3)] active:scale-95">
             <div class="absolute inset-0 w-full h-full bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
-            <span class="relative z-10">{{ authMode === 'password' ? 'Inicializar Terminal' : 'Autenticar Dispositivo' }}</span>
+            <span class="relative z-10">Inicializar Terminal</span>
             <ArrowRight size="16" strokeWidth="3" class="relative z-10 group-hover:translate-x-1 transition-transform" />
           </button>
 
@@ -163,19 +129,19 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
-import { User, KeyRound, ArrowRight, ShieldCheck, Lock, Smartphone } from 'lucide-vue-next';
+import { User, KeyRound, ArrowRight, ShieldCheck, Lock } from 'lucide-vue-next';
 
 const emit = defineEmits(['do-login']);
 const email = ref('');
 const senha = ref('');
-const token2fa = ref('');
-const authMode = ref('password'); // 'password' ou 'authenticator'
 
 const isPreloading = ref(true);
 const activeSlide = ref(0);
 let slideInterval;
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// URL DINÂMICA BLINDADA
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api/v1`;
 
 const slideImages = ref([
   'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1920&auto=format&fit=crop',
@@ -185,7 +151,7 @@ const slideImages = ref([
 
 onMounted(async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/api/v1/system/config`);
+    const response = await axios.get(`${API_BASE_URL}/system/config`);
     if (response.data && response.data.login_images && response.data.login_images.length > 0) {
         slideImages.value = response.data.login_images.map(img => img.image_data);
     }
@@ -193,7 +159,6 @@ onMounted(async () => {
     console.log('Backend offline ou inacessível. Utilizando imagens padrão.');
   }
 
-  // Sincronizado com a duração da animação SVG (2.5s total = 2s draw + 0.5s fill)
   setTimeout(() => {
     isPreloading.value = false;
   }, 2800);
@@ -208,21 +173,18 @@ onUnmounted(() => {
 });
 
 const submitLogin = () => {
-  if (email.value) {
-    // O payload emitido adapta-se consoante o modo de autenticação ativo
+  if (email.value && senha.value) {
+    // O payload emitido agora não envia token_2fa explicitamente.
+    // Se o usuário tiver o authenticator ativado no banco, ele digitará os 6 números no campo 'senha'.
     emit('do-login', { 
       email: email.value, 
-      senha: authMode.value === 'password' ? senha.value : '',
-      token_2fa: authMode.value === 'authenticator' ? token2fa.value : null 
+      senha: senha.value 
     });
   }
 };
 </script>
 
 <style scoped>
-/* ==========================================
-   ANIMAÇÃO DO SVG DRAWING (PRELOADER)
-   ========================================== */
 .logo-path {
   stroke: currentColor;
   stroke-width: 6;
@@ -260,9 +222,6 @@ const submitLogin = () => {
 .preloader-fade-leave-active { transition: opacity 0.8s ease, transform 0.8s ease; }
 .preloader-fade-leave-to { opacity: 0; transform: scale(1.1); }
 
-/* ==========================================
-   ANIMAÇÕES DA TELA DE LOGIN & SLIDES
-   ========================================== */
 .immersive-bg { background: linear-gradient(45deg, #0b0f19, #172033, #0b0f19); background-size: 400% 400%; animation: gradientAura 15s ease infinite; }
 @keyframes gradientAura { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
@@ -273,19 +232,4 @@ const submitLogin = () => {
 
 .fade-in-up { animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
-/* ==========================================
-   ANIMAÇÃO DO FORMULÁRIO (SENHA <=> 2FA)
-   ========================================== */
-.form-swap-enter-active, .form-swap-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.form-swap-enter-from {
-  opacity: 0;
-  transform: translateX(20px);
-}
-.form-swap-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
-}
 </style>
