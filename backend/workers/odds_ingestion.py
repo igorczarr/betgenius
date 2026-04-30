@@ -80,13 +80,36 @@ class APILoadBalancer:
 
 key_pool = APILoadBalancer(settings.ODDS_API_KEY_POOL)
 
-LEAGUES_MVP = [
-    "soccer_epl", 
-    "soccer_spain_la_liga", 
-    "soccer_italy_serie_a", 
-    "soccer_germany_bundesliga", 
-    "soccer_france_ligue_one"
-]
+# =====================================================================
+# MATRIZ DE ROTAÇÃO S-TIER (Otimização Máxima de Cota)
+# =====================================================================
+TIERED_LEAGUES = {
+    # TIER 1: Alta Frequência (Rodam sempre a cada ciclo)
+    1: [
+        "soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a", 
+        "soccer_germany_bundesliga", "soccer_france_ligue_one",
+        "soccer_uefa_champs_league", "soccer_conmebol_copa_libertadores",
+        "soccer_brazil_campeonato", "soccer_usa_mls"
+    ],
+    # TIER 2: Frequência Média (Rodam a cada N ciclos para poupar cota - Bulk Fetch é mais barato que Fetch por Time)
+    2: [
+        "soccer_efl_champ", "soccer_spain_segunda_division", "soccer_italy_serie_b", 
+        "soccer_germany_bundesliga2", "soccer_france_ligue_two",
+        "soccer_portugal_primeira_liga", "soccer_netherlands_eredivisie",
+        "soccer_turkey_super_league", "soccer_belgium_first_div",
+        "soccer_brazil_serie_b", "soccer_uefa_europa_league", 
+        "soccer_conmebol_copa_sudamericana", "soccer_argentina_primera_division"
+    ],
+    # TIER 3: ON-DEMAND (Exóticas). Ignoradas pelo Loop de Background. 
+    # Disponíveis apenas quando chamadas diretamente via ViewMatchCenter.
+    3: [
+        "soccer_uefa_europa_conference_league", "soccer_greece_super_league", 
+        "soccer_norway_eliteserien", "soccer_sweden_allsvenskan", "soccer_austria_bundesliga", 
+        "soccer_china_superleague", "soccer_denmark_superliga", "soccer_finland_veikkausliiga", 
+        "soccer_ireland_premier_division", "soccer_japan_j_league", "soccer_mexico_ligamx", 
+        "soccer_poland_ekstraklasa", "soccer_romania_liga1", "soccer_switzerland_superleague"
+    ]
+}
 
 semaphore = asyncio.Semaphore(5) 
 
@@ -232,7 +255,7 @@ async def process_match_odds(conn, game: dict, redis_client):
 async def fetch_league_markets(client, redis_client, sport_key):
     url = f"{BASE_URL}/{sport_key}/odds"
     params = {
-        "regions": "eu,uk",
+        "regions": "eu,uk,us",
         # AQUI ESTÁ O ARSENAL COMPLETO: 1x2, Totais, Asian Handicap (spreads), BTTS e HT.
         "markets": "h2h,totals,spreads,btts,h2h_halftime",
         "bookmakers": TARGET_BOOKMAKERS,
@@ -251,11 +274,11 @@ async def fetch_league_markets(client, redis_client, sport_key):
 
 def calculate_adaptive_sleep():
     total_quota = key_pool.get_global_quota()
-    # Menos agresivo para proteger os limites
-    if total_quota > 5000: return 900    # 15 Minutos se cota for gigante
-    elif total_quota > 2000: return 1800   # 30 Minutos
-    elif total_quota > 500: return 3600    # 1 Hora
-    else: return 14400 # 4 Horas
+    # Proteção de Cota S-Tier
+    if total_quota > 5000: return 600    # 10 Minutos se a cota for gigante
+    elif total_quota > 2000: return 1200 # 20 Minutos
+    elif total_quota > 500: return 3600  # 1 Hora
+    else: return 14400 # 4 Horas de bloqueio de segurança
 
 async def run_quant_ingestion_loop():
     redis_client = await redis.from_url(REDIS_URL)
@@ -265,17 +288,29 @@ async def run_quant_ingestion_loop():
     await entity_resolver.load_mappings_from_db()
     
     logger.info("🚀 BetGenius Quant Ingestion Ativado.")
-    logger.info(f"Monitorando o MVP: {len(LEAGUES_MVP)} Ligas.")
+    logger.info(f"Monitorando Elite (T1): {len(TIERED_LEAGUES[1])} | Periféricas (T2): {len(TIERED_LEAGUES[2])} | On-Demand (T3): {len(TIERED_LEAGUES[3])}")
 
     limits = httpx.Limits(max_keepalive_connections=20, max_connections=50)
+    
+    cycle_count = 0
     
     async with httpx.AsyncClient(limits=limits) as client:
         while True:
             start_time = datetime.now()
             current_quota = key_pool.get_global_quota()
-            logger.info(f"--- INICIANDO CICLO DE VARREDURA | QUOTA GLOBAL: {current_quota} ---")
             
-            tasks = [fetch_league_markets(client, redis_client, league) for league in LEAGUES_MVP]
+            # Determinamos o que vamos varrer neste ciclo
+            target_leagues = TIERED_LEAGUES[1].copy()
+            tier_msg = "Apenas Tier 1"
+            
+            # A cada 6 ciclos (Aprox 2 horas), varremos também o Tier 2
+            if cycle_count % 6 == 0:
+                target_leagues.extend(TIERED_LEAGUES[2])
+                tier_msg = "Tier 1 + Tier 2 (Varredura Ampla)"
+                
+            logger.info(f"--- INICIANDO CICLO {cycle_count} [{tier_msg}] | QUOTA GLOBAL: {current_quota} ---")
+            
+            tasks = [fetch_league_markets(client, redis_client, league) for league in target_leagues]
             await asyncio.gather(*tasks)
             
             elapsed = (datetime.now() - start_time).total_seconds()
@@ -284,6 +319,7 @@ async def run_quant_ingestion_loop():
             logger.info(f"🏁 Ciclo concluído em {elapsed:.2f}s")
             logger.info(f"⏳ Cota Restante: {key_pool.get_global_quota()}. Suspendendo por {sleep_time/60:.1f} minutos.\n")
             
+            cycle_count += 1
             await asyncio.sleep(sleep_time)
 
 if __name__ == "__main__":

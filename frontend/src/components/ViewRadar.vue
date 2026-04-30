@@ -465,27 +465,6 @@
           </div>
         </div>
 
-        <div class="mt-auto flex flex-col gap-2 bg-black/60 p-3 rounded-xl border border-gray-800 shadow-inner relative overflow-hidden">
-          <div class="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-[#10B981] to-transparent opacity-50"></div>
-          <div class="flex items-center gap-2 mb-1">
-            <Terminal size="12" class="text-gray-500" />
-            <span class="text-[9px] text-gray-500 uppercase tracking-widest font-bold">Bot Execution Log</span>
-          </div>
-          <div class="flex flex-col gap-1 font-mono text-[8px] text-gray-400 leading-tight h-16 overflow-hidden relative">
-            <transition-group name="list">
-              <span v-for="(log, i) in botLogs" :key="'log'+i" class="truncate" :class="{'text-[#10B981]': log.includes('OK') || log.includes('ALPHA') || log.includes('TICKET'), 'text-yellow-500': log.includes('SCAN')}">> {{ log }}</span>
-            </transition-group>
-            <div class="absolute bottom-0 w-full h-8 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
-          </div>
-          <div class="flex justify-between items-center border-t border-gray-800 pt-2 mt-1">
-            <div class="flex items-center gap-1.5">
-              <div class="w-1.5 h-1.5 rounded-full bg-[#10B981] shadow-[0_0_5px_#10B981]"></div>
-              <span class="text-[8px] text-gray-500 uppercase">Sys: Online</span>
-            </div>
-            <span class="text-[8px] text-gray-500 font-mono flex items-center gap-1"><Wifi size="8"/> Ping: 12ms</span>
-          </div>
-        </div>
-
       </div>
     </div>
 

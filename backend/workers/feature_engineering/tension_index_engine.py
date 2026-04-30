@@ -132,7 +132,13 @@ class TensionIndexEngine:
             grouped = df.groupby(['sport_key', 'season'])
             
             # Isolamos a data limite para o UPSERT (Atualiza apenas o recente e o futuro)
-            cutoff_date = pd.Timestamp(datetime.now().date() - timedelta(days=7))
+            # CÓDIGO NOVO S-TIER (Adicione em todos os 4 engines):
+            is_genesis = os.getenv("GENESIS_MODE", "False") == "True"
+            if is_genesis:
+                logger.warning("⚠️ MODO GÊNESIS ATIVADO: Processando toda a história do futebol...")
+                cutoff_date = pd.Timestamp('2010-01-01')
+            else:
+                cutoff_date = pd.Timestamp(datetime.now().date() - timedelta(days=7))
             
             for (sport_key, season), group in grouped:
                 standings = {}

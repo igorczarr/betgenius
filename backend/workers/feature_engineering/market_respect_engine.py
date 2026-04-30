@@ -1,5 +1,7 @@
 # betgenius-backend/workers/feature_engineering/market_respect_engine.py
-
+import sys
+import os
+import io
 import asyncio
 import logging
 import pandas as pd
@@ -121,7 +123,15 @@ class MarketRespectEngine:
             
             # Filtro S-Tier: Só vamos escrever no banco os jogos dos últimos 7 dias e do futuro.
             # Isso evita travar o PostgreSQL tentando reescrever 20.000 linhas do passado todos os dias.
-            cutoff_date = pd.Timestamp(datetime.now().date() - timedelta(days=7))
+            ##cutoff_date = pd.Timestamp(datetime.now().date() - timedelta(days=7))
+            # CÓDIGO NOVO S-TIER (Adicione em todos os 4 engines):
+            is_genesis = os.getenv("GENESIS_MODE", "False") == "True"
+            if is_genesis:
+                logger.warning("⚠️ MODO GÊNESIS ATIVADO: Processando toda a história do futebol...")
+                cutoff_date = pd.Timestamp('2010-01-01')
+            else:
+                cutoff_date = pd.Timestamp(datetime.now().date() - timedelta(days=7))
+
             df_to_update = df_features[df_features['date'] >= cutoff_date]
 
             home_feats = df_to_update[df_to_update['is_home'] == 1].set_index('match_id')

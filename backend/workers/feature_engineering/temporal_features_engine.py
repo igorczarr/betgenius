@@ -173,7 +173,15 @@ class TemporalFeaturesEngine:
             logger.info("🔄 Recombinando Tensores...")
             
             # FILTRO DE OTIMIZAÇÃO: Atualizamos apenas a última semana e o futuro
-            cutoff_date = pd.Timestamp(datetime.now().date() - timedelta(days=7))
+            ## cutoff_date = pd.Timestamp(datetime.now().date() - timedelta(days=7))
+            # CÓDIGO NOVO S-TIER (Adicione em todos os 4 engines):
+            is_genesis = os.getenv("GENESIS_MODE", "False") == "True"
+            if is_genesis:
+                logger.warning("⚠️ MODO GÊNESIS ATIVADO: Processando toda a história do futebol...")
+                cutoff_date = pd.Timestamp('2010-01-01')
+            else:
+                cutoff_date = pd.Timestamp(datetime.now().date() - timedelta(days=7))
+                
             df_to_update = df_features[df_features['date'] >= cutoff_date]
 
             home_feats = df_to_update[df_to_update['is_home'] == 1].set_index('match_id')

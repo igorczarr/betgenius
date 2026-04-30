@@ -4,9 +4,6 @@ import sys
 import os
 import io
 
-# =====================================================================
-# BLINDAGEM DE ENCODING PARA WINDOWS E CARREGAMENTO DO .ENV
-# =====================================================================
 if sys.platform == 'win32':
     os.environ["PYTHONIOENCODING"] = "utf-8"
     try:
@@ -24,7 +21,7 @@ import numpy as np
 import joblib
 import json
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 
 pd.set_option('future.no_silent_downcasting', True)
@@ -38,89 +35,122 @@ from core.database import db
 import redis.asyncio as redis
 from core.config import settings
 
-# Terminal Limpo, Padrão Bloomberg
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [INFERENCE-ENGINE] %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
 
 class MasterInferenceEngine:
     """
-    O Oráculo Definitivo (Substitui predict_today e live_value_scanner).
-    Utiliza o modelo XGBoost Alpha (1X2) treinado na Feature Store para varrer
-    os jogos das próximas 48h, cruzar com as Odds e gritar as apostas +EV via Redis e PostgreSQL.
+    O Diretor de Sindicato (Gestor de Oráculos).
+    Carrega toda a frota de modelos XGBoost calibrados, extrai as features do presente,
+    cruza com as odds ao vivo e dispara sinais de apostas +EV via Redis para o Dashboard.
     """
     def __init__(self):
-        self.models_dir = BASE_DIR / "brain" / "models"
-        self.alpha_model_path = self.models_dir / "alpha_oracle_1x2.joblib"
-        self.model = None
+        self.models_dir = BASE_DIR / "workers" / "brain" / "models"
+        
+        # Caminhos dos nossos modelos Institucionais
+        self.models_paths = {
+            "alpha_1x2": self.models_dir / "alpha_oracle_1x2.joblib",
+            "beta_ou25": self.models_dir / "beta_oracle_ou25.joblib",
+            "gamma_btts": self.models_dir / "gamma_oracle_btts.joblib",
+            "delta_ht_1x2": self.models_dir / "delta_oracle_ht_1x2.joblib",
+            "epsilon_corners": self.models_dir / "epsilon_oracle_corners.joblib",
+            "sigma_shots": self.models_dir / "sigma_oracle_shots.joblib",
+            "zeta_cards": self.models_dir / "zeta_oracle_cards.joblib"
+        }
+        self.models = {}
         self.redis_client = None
 
-        # Parâmetros Estritos de Operação Quantitativa
-        self.MIN_EV_THRESHOLD = 0.05   # Requeremos pelo menos 5% de Edge Real
-        self.MAX_EV_THRESHOLD = 0.35   # Ignora ilusões estatísticas de 50%+ (armadilhas)
-        self.MIN_PROB_WIN = 0.35       # A IA tem que ter pelo menos 35% de certeza que vai bater
-        self.KELLY_FRACTION = 0.25     # Quarter Kelly (Proteção de Banca)
+        # Parâmetros Estritos de Risco S-Tier
+        self.MIN_EV_THRESHOLD = 0.05    # Edge mínimo para entrar na aposta (5%)
+        self.MAX_EV_THRESHOLD = 0.40    # Acima de 40% geralmente é erro de linha da casa (não real)
+        self.MIN_PROB_WIN = 0.35        # Evita atirar em zebras cegas
+        self.KELLY_FRACTION = 0.25      # Quarter-Kelly para proteger o bankroll
         
-        # A Assinatura de DNA exata que o Alpha Oracle (2a) exige
+        # A Assinatura de DNA idêntica aos treinamentos
         self.features = [
-            'delta_elo', 'delta_wage_pct', 'delta_pontos', 'delta_posicao', 
-            'delta_market_respect', 'delta_tension', 
-            'delta_xg_micro', 'delta_xg_macro',
-            'home_elo_before', 'away_elo_before',
-            'home_pts_before', 'away_pts_before',
-            'pos_tabela_home', 'pos_tabela_away',
-            'home_xg_for_ewma_micro', 'home_xg_against_ewma_micro',
-            'away_xg_for_ewma_micro', 'away_xg_against_ewma_micro',
-            'home_xg_for_ewma_macro', 'away_xg_for_ewma_macro',
-            'home_aggression_ewma', 'away_aggression_ewma', 
-            'home_win_streak', 'home_winless_streak', 'home_clean_sheet_streak',
-            'away_win_streak', 'away_winless_streak', 'away_clean_sheet_streak',
-            'home_fraudulent_defense', 'home_fraudulent_attack',
-            'away_fraudulent_defense', 'away_fraudulent_attack'
+            'delta_elo', 'delta_pontos', 
+            'delta_xg_micro', 'delta_shots',
+            'is_missing_tactics', 
+            'smart_money_home', 'smart_money_away', 
+            'open_odd_h', 'open_odd_a' 
         ]
 
     async def connect(self):
         self.redis_client = await redis.from_url(settings.REDIS_URL)
         await db.connect()
 
-    def _load_brain(self):
-        if not self.alpha_model_path.exists():
-            logger.error(f"❌ Cérebro não encontrado: {self.alpha_model_path}. Treine o Alpha Oracle primeiro (2a_model_alpha.py).")
-            sys.exit(1)
-        self.model = joblib.load(self.alpha_model_path)
+    def _load_brains(self):
+        """Carrega todos os modelos disponíveis na pasta."""
+        logger.info("🧠 Acordando a frota de Oráculos XGBoost...")
+        for name, path in self.models_paths.items():
+            if path.exists():
+                self.models[name] = joblib.load(path)
+                logger.info(f"   [+] Oráculo {name} online e calibrado.")
+            else:
+                logger.warning(f"   [-] Oráculo {name} não encontrado. Mercado ignorado.")
 
-    def _remove_overround(self, odd_h: float, odd_d: float, odd_a: float):
-        """Remove a margem de lucro da casa de apostas para revelar a 'True Odd' do mercado."""
-        if odd_h <= 1.0 or odd_d <= 1.0 or odd_a <= 1.0:
-            return 0.0, 0.0, 0.0
+    def _remove_overround_1x2(self, odd_h: float, odd_d: float, odd_a: float):
+        """Remove a margem de lucro (Vig) da casa de apostas num mercado de 3 vias."""
+        if odd_h <= 1.0 or odd_d <= 1.0 or odd_a <= 1.0: return 0.0, 0.0, 0.0
         margin = (1.0/odd_h) + (1.0/odd_d) + (1.0/odd_a)
         return (1.0/odd_h)/margin, (1.0/odd_d)/margin, (1.0/odd_a)/margin
 
+    def _remove_overround_binary(self, odd_1: float, odd_2: float):
+         """Remove a margem de lucro num mercado de 2 vias (Ex: Over/Under)."""
+         if odd_1 <= 1.0 or odd_2 <= 1.0: return 0.0, 0.0
+         margin = (1.0/odd_1) + (1.0/odd_2)
+         return (1.0/odd_1)/margin, (1.0/odd_2)/margin
+
     def _calculate_kelly_stake(self, prob: float, odd: float) -> float:
-        """Determina a fatia da banca baseada no Kelly Criterion (fator = 0.25)."""
+        """Money Management Matemático Absoluto."""
         if odd <= 1.0: return 0.0
         b = odd - 1.0
         q = 1.0 - prob
         kelly_fraction = ((b * prob) - q) / b
         return max(0.0, kelly_fraction * self.KELLY_FRACTION)
 
+    async def publish_signal(self, match_info, market_name, ev, prob, odd):
+        """Prepara e envia o sinal +EV para o Redis (Dashboard)."""
+        stake_pct = self._calculate_kelly_stake(prob, odd)
+        
+        payload = {
+            "hora": datetime.now().strftime("%H:%M:%S"),
+            "jogo": match_info['game'],
+            "mercado": market_name,
+            "trueOdd": round(1.0/prob, 2) if prob > 0 else 0,
+            "softOdd": odd,
+            "bookie": "Bet365", # Adaptar caso a odd venha de outra casa
+            "ev": round(ev * 100, 2),
+            "kelly": round(stake_pct * 100, 2),
+            "sport": match_info['sport']
+        }
+        await self.redis_client.publish("betgenius:stream:opportunities", json.dumps(payload))
+        print(f"🟢 [SINAL] -> {market_name} | EV: +{ev*100:.1f}% | Stake: {stake_pct*100:.2f}% | {match_info['game']}")
+
     async def scan_and_predict(self):
         print("\n" + "="*90)
-        print(" 🌐 INICIANDO RADAR PANÓPTICO: Scanner de Valor e Auditoria de Jogos (XGBoost Alpha)")
+        print(" 🌐 INICIANDO RADAR PANÓPTICO: O Motor Institucional de Sinais")
         print("="*90 + "\n")
 
-        self._load_brain()
+        self._load_brains()
+        if not self.models:
+            logger.error("Nenhum modelo foi treinado. Execute os scripts na pasta 'brain/'.")
+            return
+
         await self.connect()
 
         try:
             async with db.pool.acquire() as conn:
-                # Buscamos a Tabela Matriz, cruzada com os Nomes e Odds Atuais
+                # S-TIER: Precisamos buscar as odds ao vivo e as de abertura para montar as features
                 query = """
-                    SELECT f.*, 
-                           th.canonical_name as home_team, ta.canonical_name as away_team,
-                           m.sport_key,
-                           o_home.current_odd as live_odd_home, 
-                           o_draw.current_odd as live_odd_draw, 
-                           o_away.current_odd as live_odd_away
+                    SELECT 
+                        f.*, 
+                        th.canonical_name as home_team, ta.canonical_name as away_team, m.sport_key,
+                        m.pin_odd_home as open_odd_h, m.pin_odd_away as open_odd_a,
+                        m.pin_closing_home as close_odd_h, m.pin_closing_away as close_odd_a,
+                        o_home.current_odd as live_odd_home, 
+                        o_draw.current_odd as live_odd_draw, 
+                        o_away.current_odd as live_odd_away
                     FROM quant_ml.feature_store f
                     JOIN core.matches_history m ON f.match_id = m.id
                     JOIN core.teams th ON m.home_team_id = th.id
@@ -135,130 +165,75 @@ class MasterInferenceEngine:
                 records = await conn.fetch(query)
 
                 if not records:
-                    logger.warning("⚠️ Nenhum jogo agendado (com features) para as próximas 48h. A Matrix está vazia ou sem novos jogos.")
+                    logger.warning("⚠️ Nenhum jogo futuro (com features) agendado para o Radar.")
                     return
 
                 df = pd.DataFrame([dict(r) for r in records])
-                logger.info(f"🔎 Processando {len(df)} eventos agendados...\n")
+                logger.info(f"🔎 Analisando o mercado futuro: {len(df)} eventos encontrados.\n")
 
-                # Higienização de tipos para evitar crash do modelo
+                # Reconstruindo a Feature Store exata usada no treino
+                df['is_missing_tactics'] = (df['h_xg_for_micro'].isna() | (df['h_xg_for_micro'] <= 0.05)).astype(int)
+                df['delta_elo'] = df['delta_elo'].fillna(0.0)
+                df['delta_pontos'] = df['home_pts_before'] - df['away_pts_before']
+                df['delta_xg_micro'] = np.where(df['is_missing_tactics'] == 1, 0.0, df['h_xg_for_micro'] - df['a_xg_for_micro'])
+                df['delta_shots'] = np.where(df['is_missing_tactics'] == 1, 0.0, df['h_shots_for'] - df['a_shots_for'])
+                
+                # Contexto de Smart Money usando as odds de abertura e fechamento (ou abertura e live se não fechou)
+                df['open_odd_h'] = df['open_odd_h'].fillna(2.80)
+                df['open_odd_a'] = df['open_odd_a'].fillna(2.80)
+                df['close_odd_h'] = df['close_odd_h'].fillna(df['live_odd_home']).fillna(2.80)
+                df['close_odd_a'] = df['close_odd_a'].fillna(df['live_odd_away']).fillna(2.80)
+                
+                df['smart_money_home'] = df['open_odd_h'] / (df['close_odd_h'] + 0.01)
+                df['smart_money_away'] = df['open_odd_a'] / (df['close_odd_a'] + 0.01)
+
+                # Garante que as colunas existem
                 for col in self.features:
+                    if col not in df.columns: df[col] = 0.0
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
 
-                # Previsão Multi-Classe (0=Away, 1=Draw, 2=Home)
                 X_pred = df[self.features]
-                probs = self.model.predict_proba(X_pred)
-                
-                df['prob_away'] = probs[:, 0]
-                df['prob_draw'] = probs[:, 1]
-                df['prob_home'] = probs[:, 2]
-
                 opportunities_found = 0
-                records_to_insert = []
 
-                # Percorre jogo a jogo avaliando as assimetrias
-                for _, row in df.iterrows():
-                    match_id = int(row['match_id'])
-                    home_team = row['home_team']
-                    away_team = row['away_team']
+                # 1. PROCESSAR MERCADO ALPHA (1X2 MATCH ODDS)
+                if "alpha_1x2" in self.models:
+                    probs_1x2 = self.models["alpha_1x2"].predict_proba(X_pred)
                     
-                    odd_h = float(row['live_odd_home']) if pd.notna(row['live_odd_home']) else 0.0
-                    odd_d = float(row['live_odd_draw']) if pd.notna(row['live_odd_draw']) else 0.0
-                    odd_a = float(row['live_odd_away']) if pd.notna(row['live_odd_away']) else 0.0
+                    for i, row in df.iterrows():
+                        odd_h = float(row.get('live_odd_home', 0) or 0)
+                        odd_d = float(row.get('live_odd_draw', 0) or 0)
+                        odd_a = float(row.get('live_odd_away', 0) or 0)
 
-                    print("-" * 90)
-                    print(f"⚽ {home_team} vs {away_team} | {row['sport_key']}")
-                    
-                    if odd_h <= 1.0 or odd_d <= 1.0 or odd_a <= 1.0:
-                        print("🏦 BET365 ODDS    : [Aguardando abertura de mercado]")
-                        print("🔴 [PASS] -> Sem dados suficientes para calcular EV.\n")
-                        continue
+                        if odd_h > 1.0 and odd_d > 1.0 and odd_a > 1.0:
+                            p_a, p_d, p_h = probs_1x2[i][0], probs_1x2[i][1], probs_1x2[i][2]
+                            true_m_h, true_m_d, true_m_a = self._remove_overround_1x2(odd_h, odd_d, odd_a)
 
-                    p_h, p_d, p_a = row['prob_home'], row['prob_draw'], row['prob_away']
+                            ev_h = (p_h * true_m_h) - 1.0
+                            ev_a = (p_a * true_m_a) - 1.0
 
-                    print(f"⚖️ TRUE ODDS (IA) : Home @ {1/p_h:.2f} ({p_h:.1%}) | Draw @ {1/p_d:.2f} ({p_d:.1%}) | Away @ {1/p_a:.2f} ({p_a:.1%})")
-                    print(f"🏦 BET365 ODDS    : Home @ {odd_h:.2f} | Draw @ {odd_d:.2f} | Away @ {odd_a:.2f}")
+                            match_info = {"game": f"{row['home_team']} x {row['away_team']}", "sport": row['sport_key']}
 
-                    # Remove o Overround (Margem da casa) para calcular o EV corretamente
-                    true_m_h, true_m_d, true_m_a = self._remove_overround(odd_h, odd_d, odd_a)
+                            if self.MIN_EV_THRESHOLD < ev_h < self.MAX_EV_THRESHOLD and p_h >= self.MIN_PROB_WIN:
+                                await self.publish_signal(match_info, "Vencedor (Home)", ev_h, p_h, odd_h)
+                                opportunities_found += 1
+                                
+                            elif self.MIN_EV_THRESHOLD < ev_a < self.MAX_EV_THRESHOLD and p_a >= self.MIN_PROB_WIN:
+                                await self.publish_signal(match_info, "Vencedor (Away)", ev_a, p_a, odd_a)
+                                opportunities_found += 1
 
-                    ev_h = (p_h * true_m_h) - 1.0
-                    ev_d = (p_d * true_m_d) - 1.0
-                    ev_a = (p_a * true_m_a) - 1.0
+                # (Futuramente você pode expandir aqui para iterar sobre os modelos Beta, Gamma, etc. 
+                # basta ler as odds corretas do banco, exatamente como feito no bloco Alpha acima).
 
-                    print(f"📈 EXPECTED VALUE : Home {ev_h*100:.1f}% | Draw {ev_d*100:.1f}% | Away {ev_a*100:.1f}%")
-
-                    target_market = None
-                    target_ev = 0.0
-                    target_prob = 0.0
-                    target_odd = 0.0
-
-                    # O Robô decide atirar onde a vantagem é maior e mais segura
-                    if self.MIN_EDGE_THRESHOLD < ev_h < self.MAX_EV_THRESHOLD and p_h >= self.MIN_PROB_WIN:
-                        target_market, target_ev, target_prob, target_odd = "Home", ev_h, p_h, odd_h
-                        print(f"🟢 [SINAL] -> APOSTAR HOME (+EV de {ev_h*100:.1f}%)")
-                    elif self.MIN_EDGE_THRESHOLD < ev_a < self.MAX_EV_THRESHOLD and p_a >= self.MIN_PROB_WIN:
-                        target_market, target_ev, target_prob, target_odd = "Away", ev_a, p_a, odd_a
-                        print(f"🟢 [SINAL] -> APOSTAR AWAY (+EV de {ev_a*100:.1f}%)")
-                    else:
-                        print("🔴 [PASS] -> Mercado eficiente ou variância muito alta.")
-
-                    is_value_bet = bool(target_market is not None)
-
-                    records_to_insert.append((
-                        match_id, round(p_h, 4), round(p_d, 4), round(p_a, 4), 
-                        round(ev_h, 4), round(ev_a, 4), is_value_bet
-                    ))
-
-                    if is_value_bet:
-                        opportunities_found += 1
-                        stake_pct = self._calculate_kelly_stake(target_prob, target_odd)
-                        
-                        # Formatando Payload para o ViewRadar (Vue.js Front-End)
-                        payload = {
-                            "hora": datetime.now().strftime("%H:%M:%S"),
-                            "jogo": f"{home_team} x {away_team}",
-                            "mercado": f"Vencedor: {target_market}",
-                            "pinOpen": "N/A",
-                            "pinClose": "N/A",
-                            "trueOdd": round(1.0/target_prob, 2),
-                            "softOdd": target_odd,
-                            "bookie": "Bet365",
-                            "ev": round(target_ev * 100, 2),
-                            "kelly": round(stake_pct * 100, 2),
-                            "sport": row['sport_key']
-                        }
-
-                        # Envia para o Front-End piscar na tela
-                        await self.redis_client.publish("betgenius:stream:opportunities", json.dumps(payload))
-
-                print()
-                print("="*90)
-                print(f"🏆 RESUMO: {opportunities_found} Assimetrias Institucionais Disparadas pro Dashboard.")
-                print("="*90 + "\n")
-
-                if records_to_insert:
-                    # Registramos no Banco de Dados para controle do Gestor
-                    await conn.executemany("""
-                        INSERT INTO quant_ml.predictions 
-                        (match_id, prob_home, prob_draw, prob_away, ev_home, ev_away, is_value_bet, updated_at)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-                        ON CONFLICT (match_id) DO UPDATE SET
-                            prob_home=EXCLUDED.prob_home, prob_draw=EXCLUDED.prob_draw, prob_away=EXCLUDED.prob_away,
-                            ev_home=EXCLUDED.ev_home, ev_away=EXCLUDED.ev_away, is_value_bet=EXCLUDED.is_value_bet, updated_at=NOW()
-                    """, records_to_insert)
+                print(f"\n🏆 RESUMO: {opportunities_found} Assimetrias Institucionais Disparadas pro Dashboard.\n")
 
         except Exception as e:
-            logger.error(f"❌ Falha Crítica na Inferência Preditiva: {e}")
+            logger.error(f"❌ Falha Crítica na Inferência Prequentiva: {e}")
         finally:
             await db.disconnect()
             if self.redis_client:
                 await self.redis_client.aclose()
 
 if __name__ == "__main__":
-    # Ajuste para evitar erro de atributos caso rode independentemente antes do __init__ completo
-    MasterInferenceEngine.MIN_EDGE_THRESHOLD = 0.05
-    
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     asyncio.run(MasterInferenceEngine().scan_and_predict())

@@ -1,13 +1,21 @@
 <template>
-  <div data-theme="institutional-dark" class="app-master-wrapper h-screen w-screen overflow-hidden bg-[#0b0f19] m-0 p-0 absolute inset-0 font-sans">
+  <div data-theme="institutional-dark" class="app-master-wrapper h-screen w-screen overflow-hidden m-0 p-0 absolute inset-0 font-sans">
     
-    <div class="ambient-bg">
-      <div class="ambient-orb ambient-orb-1"></div>
-      <div class="ambient-orb ambient-orb-2"></div>
-      <div class="absolute inset-0 bg-noise opacity-[0.03] mix-blend-overlay pointer-events-none"></div>
+    <div class="absolute inset-0 bg-[#060a12] z-0 overflow-hidden">
+      <div class="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#10B981] rounded-full mix-blend-screen filter blur-[150px] opacity-10 animate-blob"></div>
+      <div class="absolute top-[20%] right-[-10%] w-[50%] h-[50%] bg-[#3B82F6] rounded-full mix-blend-screen filter blur-[150px] opacity-10 animate-blob animation-delay-2000"></div>
+      <div class="absolute bottom-[-20%] left-[20%] w-[50%] h-[50%] bg-[#a855f7] rounded-full mix-blend-screen filter blur-[150px] opacity-10 animate-blob animation-delay-4000"></div>
+      
+      <div class="absolute inset-0 bg-matrix-grid opacity-[0.03] pointer-events-none"></div>
+      
+      <div class="data-flow-container absolute inset-0 opacity-20">
+        <div class="data-particle" v-for="i in 15" :key="`dp-${i}`" :style="getParticleStyle(i)"></div>
+      </div>
+      
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#060a12_100%)] opacity-80 pointer-events-none"></div>
     </div>
     
-    <ViewLogin v-if="!usuarioLogado" @do-login="fazerLogin" />
+    <ViewLogin v-if="!usuarioLogado" @do-login="fazerLogin" class="relative z-20" />
 
     <div v-else class="app-master-layout h-full w-full flex overflow-hidden relative z-10">
     
@@ -18,12 +26,12 @@
         @logout="fazerLogout"
       />
 
-      <main class="flex-1 w-full h-full flex flex-col relative overflow-hidden bg-radial-gradient transition-all duration-500 pt-[60px]" :class="{ 'pr-[340px]': !watchlistCollapsed && !isMobile }">
+      <main class="flex-1 w-full h-full flex flex-col relative overflow-hidden transition-all duration-500 pt-[60px]" :class="{ 'pr-[340px]': !watchlistCollapsed && !isMobile }">
         
         <div class="w-full bg-black/40 backdrop-blur-md border-b border-white/5 overflow-hidden flex items-center h-8 shrink-0 relative z-40 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
           <div class="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#10B981]/20 to-transparent"></div>
           
-          <div class="bg-gradient-to-r from-[#0b0f19] to-[#121927] text-white text-[9px] font-bold uppercase tracking-[0.2em] px-4 h-full flex items-center shrink-0 z-20 border-r border-white/5 shadow-[10px_0_20px_rgba(0,0,0,0.8)]">
+          <div class="bg-gradient-to-r from-[#060a12] to-[#0f1523] text-white text-[9px] font-bold uppercase tracking-[0.2em] px-4 h-full flex items-center shrink-0 z-20 border-r border-white/5 shadow-[10px_0_20px_rgba(0,0,0,0.8)]">
             <Radio :size="10" class="mr-2 text-[#10B981] animate-pulse" /> Live Feed
           </div>
           
@@ -60,7 +68,7 @@
         </div>
       </main>
 
-      <aside class="fixed right-0 top-[60px] h-[calc(100vh-60px)] bg-gradient-to-b from-[#0b0f19]/95 to-[#121927]/95 backdrop-blur-2xl border-l border-white/5 z-40 transition-all duration-500 flex flex-col shadow-[-30px_0_60px_rgba(0,0,0,0.8)]" 
+      <aside class="fixed right-0 top-[60px] h-[calc(100vh-60px)] bg-gradient-to-b from-[#060a12]/95 to-[#0f1523]/95 backdrop-blur-2xl border-l border-white/5 z-40 transition-all duration-500 flex flex-col shadow-[-30px_0_60px_rgba(0,0,0,0.8)]" 
              :class="watchlistCollapsed ? 'translate-x-full w-[340px]' : 'translate-x-0 w-[340px]'">
         
         <div class="p-5 border-b border-white/5 flex items-center justify-between bg-black/20 shrink-0 relative overflow-hidden">
@@ -138,7 +146,6 @@ import ViewHypeSentimento from './components/ViewHypeSentimento.vue';
 import ViewBacktestEngine from './components/ViewBacktestEngine.vue';
 import ViewConfig from './components/ViewConfig.vue';
 
-// 🛑 A CURA DAS PORTAS (S-Tier)
 const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const API_BASE_URL = rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api/v1`;
 const GATEWAY_URL = (import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8000').replace(/\/$/, '');
@@ -158,7 +165,6 @@ let pollingInterval;
 const router = useRouter();
 const route = useRoute();
 
-// Mapa de Títulos das Abas
 const abaTitulos = {
   'radar': 'Radar',
   'match-center': 'Match Center',
@@ -177,12 +183,27 @@ const mudarAba = (aba) => {
   abaAtiva.value = aba; 
 };
 
-// Monitora mudanças na abaAtiva para trocar o título do documento
 watch(abaAtiva, (newAba) => {
   atualizarTituloAba(newAba);
 });
 
-const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+// Geração de estilos aleatórios mas controlados para as partículas
+const getParticleStyle = (index) => {
+  const left = Math.random() * 100;
+  const duration = 15 + Math.random() * 20;
+  const delay = Math.random() * 10;
+  const size = 1 + Math.random() * 2;
+  const opacity = 0.2 + Math.random() * 0.5;
+  
+  return {
+    left: `${left}%`,
+    width: `${size}px`,
+    height: `${size * 10}px`,
+    animationDuration: `${duration}s`,
+    animationDelay: `${delay}s`,
+    opacity: opacity
+  };
+};
 
 const formatAlert = (alert) => {
   let colorClass = 'text-gray-400';
@@ -216,7 +237,6 @@ const fazerLogin = async (credenciais) => {
       usuarioLogado.value = { name: response.data.user.name, role: response.data.user.role, avatar: response.data.user.avatar };
       globalState.uiMode = response.data.user.modo;
       
-      // Dispara o gatilho da Matrix Mestra no Background silenciosamente
       axios.post(`${API_BASE_URL}/system/sync-post-login`).catch(e => console.error("Sync Error", e));
     }
   } catch (error) {
@@ -273,7 +293,6 @@ onMounted(() => {
 
   try {
       const socket = io(GATEWAY_URL, { transports: ['websocket'] });
-      socket.on('connect', () => console.log(`[SOCKET] Conectado ao Gateway HFT: ${GATEWAY_URL}`));
       socket.on('MARKET_SENTIMENT_ALERT', (payload) => {
           liveAlerts.value.unshift({ time: "Agora", tipo: payload.tipo || 'INFO', texto: payload.texto || 'Alerta HFT' });
       });
@@ -299,7 +318,7 @@ onUnmounted(() => {
 *, *::before, *::after { box-sizing: border-box; }
 
 :root {
-  --bg-app: #0b0f19; 
+  --bg-app: #060a12; 
   --bet-primary: #10B981;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
@@ -310,15 +329,44 @@ body { background: var(--bg-app); color: var(--text-main); font-family: 'Poppins
 .font-mono { font-family: 'Lemon Milk', sans-serif; letter-spacing: 1px; }
 .font-jersey { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }
 
-/* Noise overlay for premium texture */
-.bg-noise { background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E'); }
+/* ======== NOVO BACKGROUND DINÂMICO S-TIER ======== */
+.bg-matrix-grid {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center center;
+}
 
-/* Ambient Orbs */
-.ambient-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; overflow: hidden; pointer-events: none; }
-.ambient-orb { position: absolute; border-radius: 50%; filter: blur(140px); opacity: 0.15; animation: floatOrb 25s infinite alternate cubic-bezier(0.4, 0, 0.2, 1); }
-.ambient-orb-1 { width: 80vw; height: 80vh; background: #10B981; top: -20vh; left: -10vw; }
-.ambient-orb-2 { width: 60vw; height: 60vh; background: #3B82F6; bottom: -10vh; right: -10vw; animation-delay: -10s; }
-@keyframes floatOrb { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(5%, 5%) scale(1.2); } }
+@keyframes blob {
+  0% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+.animate-blob { animation: blob 20s infinite alternate; }
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-4000 { animation-delay: 4s; }
+
+.data-flow-container {
+  overflow: hidden;
+}
+
+.data-particle {
+  position: absolute;
+  bottom: -10%;
+  background: linear-gradient(to top, rgba(16,185,129,0), rgba(16,185,129,0.8), rgba(255,255,255,0.8));
+  border-radius: 4px;
+  animation: dataFlow linear infinite;
+  box-shadow: 0 0 10px rgba(16,185,129,0.5);
+}
+
+@keyframes dataFlow {
+  0% { transform: translateY(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(-120vh); opacity: 0; }
+}
+/* ================================================== */
 
 /* Scrollbar S-Tier */
 .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -336,7 +384,6 @@ body { background: var(--bg-app); color: var(--text-main); font-family: 'Poppins
 .fade-backdrop-enter-active, .fade-backdrop-leave-active { transition: opacity 0.3s ease; }
 .fade-backdrop-enter-from, .fade-backdrop-leave-to { opacity: 0; }
 
-/* FIX: Marquee Live Feed (Starts right, ends left) */
 @keyframes marquee { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
 .animate-marquee { display: inline-block; animation: marquee 35s linear infinite; will-change: transform; padding-right: 50vw;}
 .animate-marquee:hover { animation-play-state: paused; }
@@ -345,5 +392,4 @@ body { background: var(--bg-app); color: var(--text-main); font-family: 'Poppins
 /* Globals */
 .app-master-wrapper { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
 .app-master-layout { display: flex; width: 100%; height: 100%; overflow: hidden; }
-.bg-radial-gradient { background: radial-gradient(circle at top center, rgba(16, 185, 129, 0.03) 0%, transparent 80%); }
 </style>
