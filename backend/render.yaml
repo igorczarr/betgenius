@@ -1,0 +1,34 @@
+# betgenius-backend/render.yaml
+
+services:
+  # 1. SERVIDOR PYTHON FASTAPI (O Cérebro da API)
+  - type: web
+    name: betgenius-python-api
+    env: python
+    # Atualizamos o pip antes de instalar os requisitos para evitar erros de metadata
+    buildCommand: "python -m pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+  # 2. O RADAR DE ODDS (Worker 24/7)
+  - type: worker
+    name: betgenius-odds-radar
+    env: python
+    buildCommand: "python -m pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "python workers/odds_ingestion.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+  # 3. A FORJA DA MADRUGADA (Treina os Modelos e processa a Matriz)
+  - type: cron
+    name: betgenius-nightly-forge
+    env: python
+    schedule: "0 3 * * *" 
+    buildCommand: "python -m pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "python workers/api_football_master.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0

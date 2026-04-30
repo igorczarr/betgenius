@@ -9,6 +9,7 @@ import redis.asyncio as redis
 import json
 import logging
 import hashlib
+import subprocess
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
@@ -30,14 +31,18 @@ sys.path.append(str(BASE_DIR))
 
 from core.database import db
 from engine.entity_resolution import entity_resolver
-from workers.feature_engineering.matrix_builder import QuantMLBuilder 
 from engine.bankroll_manager import BankrollManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [API-FOOTBALL-MASTER] %(message)s")
 logger = logging.getLogger(__name__)
 
-# Fallback Redis
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+# =====================================================================
+# BLINDAGEM DA URL DO REDIS (Tratamento de Strings Upstash/Cloud)
+# =====================================================================
+raw_redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = raw_redis_url.replace("redis-cli --tls -u ", "").strip()
+if not REDIS_URL.startswith(("redis://", "rediss://", "unix://")):
+    REDIS_URL = "redis://localhost:6379"
 
 class APIFootballBalancer:
     """Load Balancer de Chaves da API-Football S-Tier"""
@@ -61,7 +66,6 @@ class APIFootballBalancer:
     def get_active_headers(self) -> dict:
         if len(self.dead_keys) == self.total_keys:
             logger.critical("💀 TODAS AS CHAVES DA API-FOOTBALL ESTÃO ESGOTADAS HOJE.")
-            # Reinicia as chaves mortas se virou o dia
             self.dead_keys.clear() 
             
         current_key = self.keys[self.current_idx]
@@ -95,7 +99,6 @@ class APIFootballMaster:
         self.ALL_LEAGUES = {**self.TIER_1_LEAGUES, **self.TIER_2_LEAGUES, **self.TIER_3_LEAGUES, **self.NATIONAL_TEAMS}
 
     async def initialize_schema(self, conn):
-        # Garante que temos a coluna api_fixture_id vital para o Live Tracking
         await conn.execute("""
             ALTER TABLE core.matches_history 
             ADD COLUMN IF NOT EXISTS api_fixture_id INTEGER UNIQUE;
@@ -156,18 +159,25 @@ class APIFootballMaster:
         return stats
 
     # =====================================================================
-    # TASK 1: DAILY SYNC (Fixture + Stats de Ontem)
+    # TASK 1: DAILY SYNC (Ontem e Próximas 48h)
     # =====================================================================
     async def task_daily_sync(self, client):
         agora = datetime.now(self.brt_tz)
-        hoje_str = agora.strftime("%Y-%m-%d")
+        
         ontem_str = (agora - timedelta(days=1)).strftime("%Y-%m-%d")
+        hoje_str = agora.strftime("%Y-%m-%d")
+        amanha_str = (agora + timedelta(days=1)).strftime("%Y-%m-%d")
+        depois_amanha_str = (agora + timedelta(days=2)).strftime("%Y-%m-%d")
         
-        logger.info(f"📅 [DAILY SYNC] Mapeando Fixtures: Hoje ({hoje_str}) e Ontem ({ontem_str})")
+        datas_alvo = [ontem_str, hoje_str, amanha_str, depois_amanha_str]
         
-        fixtures_hoje = await self._make_request(client, "/fixtures", {"date": hoje_str})
-        fixtures_ontem = await self._make_request(client, "/fixtures", {"date": ontem_str})
-        all_fixtures = fixtures_hoje + fixtures_ontem
+        logger.info(f"📅 [DAILY SYNC] Mapeando Fixtures: De {ontem_str} a {depois_amanha_str}")
+        
+        all_fixtures = []
+        for d_str in datas_alvo:
+            f_dia = await self._make_request(client, "/fixtures", {"date": d_str})
+            if f_dia:
+                all_fixtures.extend(f_dia)
 
         count_upsert = 0
         async with db.pool.acquire() as conn:
@@ -237,8 +247,36 @@ class APIFootballMaster:
                              s_h['corners'], s_a['corners'], s_h['fouls'], s_a['fouls'],
                              s_h['yellow'], s_a['yellow'], s_h['red'], s_a['red'])
                              
-                logger.info("🧠 Acionando Motor XGBoost (QuantMLBuilder) após Injeção Pós-Jogo...")
-                await QuantMLBuilder().build_matrix()
+                # ---------------------------------------------------------------
+                # MODIFICAÇÃO CIRÚRGICA: Rolling Upsert + Inferência Islada
+                # ---------------------------------------------------------------
+                logger.info("🧠 Acionando Atualização da Matrix (Modo Rolling Upsert)...")
+                
+                os.environ["GENESIS_MODE"] = "False" 
+                
+                feature_pipelines = [
+                    "workers/feature_engineering/club_pedigree_engine.py",
+                    "workers/feature_engineering/temporal_features_engine.py",
+                    "workers/feature_engineering/context_features_engine.py",
+                    "workers/feature_engineering/matrix_builder.py",
+                    "workers/feature_engineering/homogenizer.py"
+                ]
+                
+                for script in feature_pipelines:
+                    script_path = BASE_DIR / script
+                    if script_path.exists():
+                        logger.info(f"▶️ Processando: {script.split('/')[-1]}")
+                        subprocess.run([sys.executable, str(script_path)], check=False)
+                
+                logger.info("🔮 Calculando Probabilidades dos próximos jogos (Inferência)...")
+                try:
+                    from engine.inference_engine import MasterInferenceEngine
+                    inference = MasterInferenceEngine()
+                    await inference.scan_and_predict()
+                    logger.info("✅ Probabilidades e Edges calculados com sucesso.")
+                except Exception as e:
+                    logger.error(f"⚠️ Erro ao calcular Inferência (Pode requerer o modelo pré-treinado): {e}")
+                # ---------------------------------------------------------------
                 
                 logger.info("💼 Acionando o Bankroll Manager para liquidar operações abertas no fundo...")
                 try:
@@ -249,103 +287,91 @@ class APIFootballMaster:
                     logger.error(f"Erro ao liquidar o Ledger: {e}")
 
     # =====================================================================
-    # TASK 2: LINEUPS (45 Minutos Pré-Jogo Tier 1)
+    # TASK 2: LINEUPS (Desativado temporariamente)
     # =====================================================================
     async def task_lineups(self, client):
-        tier1_sports = tuple(self.TIER_1_LEAGUES.values())
-        async with db.pool.acquire() as conn:
-            upcoming = await conn.fetch("""
-                SELECT m.api_fixture_id, m.id as match_id, m.home_team_id, m.away_team_id
-                FROM core.matches_history m
-                LEFT JOIN core.match_lineups l ON m.id = l.match_id
-                WHERE m.status = 'SCHEDULED' 
-                AND m.start_time BETWEEN NOW() AND NOW() + INTERVAL '50 minutes'
-                AND m.sport_key IN (SELECT unnest($1::text[]))
-                AND l.match_id IS NULL
-            """, tier1_sports)
-
-            for gm in upcoming:
-                api_id = gm['api_fixture_id']
-                logger.info(f"📋 [LINEUPS] Extraindo escalação do Jogo ID {api_id} (Tier 1)...")
-                lineups = await self._make_request(client, "/fixtures/lineups", {"fixture": api_id})
-                
-                for team_l in lineups:
-                    t_id_db = gm['home_team_id'] if team_l['team']['id'] == lineups[0]['team']['id'] else gm['away_team_id']
-                    form = team_l.get('formation', 'Unknown')
-                    coach = team_l.get('coach', {}).get('name', 'Unknown')
-                    start_xi = json.dumps(team_l.get('startXI', []))
-                    subs = json.dumps(team_l.get('substitutes', []))
-
-                    await conn.execute("""
-                        INSERT INTO core.match_lineups (match_id, team_id, formation, coach_name, starting_xi, substitutes)
-                        VALUES ($1, $2, $3, $4, $5, $6)
-                        ON CONFLICT (match_id, team_id) DO NOTHING;
-                    """, gm['match_id'], t_id_db, form, coach, start_xi, subs)
+        logger.debug("⏸️ [LINEUPS] Tarefa ignorada temporariamente.")
+        return
 
     # =====================================================================
     # TASK 3: IN-PLAY TRACKING (On-Demand via Redis)
     # =====================================================================
-    async def task_live_daemon(self, client, redis_client):
-        active_str = await redis_client.get("quant:live_tracking_ids")
-        if not active_str: return
-        live_ids = json.loads(active_str)
-        if not live_ids: return
-
-        chunks = [live_ids[i:i+20] for i in range(0, len(live_ids), 20)]
-        async with db.pool.acquire() as conn:
-            for chunk in chunks:
-                ids_param = "-".join(map(str, chunk))
-                live_data = await self._make_request(client, "/fixtures", {"ids": ids_param})
+    async def task_live_daemon(self, client):
+        """
+        MODIFICAÇÃO: Conexão Redis instanciada e encerrada on-demand para 
+        evitar Timeouts e ConnectionError em Daemons de longa duração.
+        """
+        redis_client = None
+        try:
+            redis_client = await redis.from_url(REDIS_URL, decode_responses=True)
+            active_str = await redis_client.get("quant:live_tracking_ids")
+            if not active_str: 
+                return
                 
-                for fix in live_data:
-                    m_api_id = fix['fixture']['id']
-                    status = fix['fixture']['status']['short']
-                    
-                    if status in ['FT', 'AET', 'PEN', 'CANC', 'PSTP']:
-                        live_ids.remove(m_api_id) if m_api_id in live_ids else None
-                        continue
-                        
-                    minute = fix['fixture']['status']['elapsed'] or 0
-                    g_h = fix['goals']['home'] or 0
-                    g_a = fix['goals']['away'] or 0
-                    
-                    st_h = self.extract_stats(fix.get('statistics', []), fix['teams']['home']['id'])
-                    st_a = self.extract_stats(fix.get('statistics', []), fix['teams']['away']['id'])
-                    
-                    s_h_total = st_h['shots']
-                    s_a_total = st_a['shots']
-                    s_h_on = st_h['shots_target']
-                    s_a_on = st_a['shots_target']
-                    c_h = st_h['corners']
-                    c_a = st_a['corners']
-                    
-                    momentum_h = (s_h_on * 2.5) + ((s_h_total - s_h_on) * 1.0) + (c_h * 1.5)
-                    momentum_a = (s_a_on * 2.5) + ((s_a_total - s_a_on) * 1.0) + (c_a * 1.5)
-                    momentum_index = momentum_h - momentum_a
-                    
-                    last_event = "Em andamento"
-                    if fix.get('events'): last_event = fix['events'][-1]['detail']
+            live_ids = json.loads(active_str)
+            if not live_ids: 
+                return
 
-                    db_match_id = await conn.fetchval("SELECT id FROM core.matches_history WHERE api_fixture_id = $1", m_api_id)
-                    if db_match_id:
-                        await conn.execute("""
-                            INSERT INTO core.live_match_tracking 
-                            (match_id, match_minute, status_short, home_score, away_score, 
-                             home_shots_target_live, away_shots_target_live, home_corners_live, away_corners_live,
-                             momentum_index, last_event, last_updated)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-                            ON CONFLICT (match_id) DO UPDATE SET
-                                match_minute = EXCLUDED.match_minute, status_short = EXCLUDED.status_short,
-                                home_score = EXCLUDED.home_score, away_score = EXCLUDED.away_score,
-                                home_shots_target_live = EXCLUDED.home_shots_target_live,
-                                away_shots_target_live = EXCLUDED.away_shots_target_live,
-                                home_corners_live = EXCLUDED.home_corners_live,
-                                away_corners_live = EXCLUDED.away_corners_live,
-                                momentum_index = EXCLUDED.momentum_index,
-                                last_event = EXCLUDED.last_event, last_updated = NOW();
-                        """, db_match_id, minute, status, g_h, g_a, s_h_on, s_a_on, c_h, c_a, round(momentum_index, 2), last_event)
-        
-        await redis_client.set("quant:live_tracking_ids", json.dumps(live_ids))
+            chunks = [live_ids[i:i+20] for i in range(0, len(live_ids), 20)]
+            async with db.pool.acquire() as conn:
+                for chunk in chunks:
+                    ids_param = "-".join(map(str, chunk))
+                    live_data = await self._make_request(client, "/fixtures", {"ids": ids_param})
+                    
+                    for fix in live_data:
+                        m_api_id = fix['fixture']['id']
+                        status = fix['fixture']['status']['short']
+                        
+                        if status in ['FT', 'AET', 'PEN', 'CANC', 'PSTP']:
+                            live_ids.remove(m_api_id) if m_api_id in live_ids else None
+                            continue
+                            
+                        minute = fix['fixture']['status']['elapsed'] or 0
+                        g_h = fix['goals']['home'] or 0
+                        g_a = fix['goals']['away'] or 0
+                        
+                        st_h = self.extract_stats(fix.get('statistics', []), fix['teams']['home']['id'])
+                        st_a = self.extract_stats(fix.get('statistics', []), fix['teams']['away']['id'])
+                        
+                        s_h_total = st_h['shots']
+                        s_a_total = st_a['shots']
+                        s_h_on = st_h['shots_target']
+                        s_a_on = st_a['shots_target']
+                        c_h = st_h['corners']
+                        c_a = st_a['corners']
+                        
+                        momentum_h = (s_h_on * 2.5) + ((s_h_total - s_h_on) * 1.0) + (c_h * 1.5)
+                        momentum_a = (s_a_on * 2.5) + ((s_a_total - s_a_on) * 1.0) + (c_a * 1.5)
+                        momentum_index = momentum_h - momentum_a
+                        
+                        last_event = "Em andamento"
+                        if fix.get('events'): last_event = fix['events'][-1]['detail']
+
+                        db_match_id = await conn.fetchval("SELECT id FROM core.matches_history WHERE api_fixture_id = $1", m_api_id)
+                        if db_match_id:
+                            await conn.execute("""
+                                INSERT INTO core.live_match_tracking 
+                                (match_id, match_minute, status_short, home_score, away_score, 
+                                 home_shots_target_live, away_shots_target_live, home_corners_live, away_corners_live,
+                                 momentum_index, last_event, last_updated)
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+                                ON CONFLICT (match_id) DO UPDATE SET
+                                    match_minute = EXCLUDED.match_minute, status_short = EXCLUDED.status_short,
+                                    home_score = EXCLUDED.home_score, away_score = EXCLUDED.away_score,
+                                    home_shots_target_live = EXCLUDED.home_shots_target_live,
+                                    away_shots_target_live = EXCLUDED.away_shots_target_live,
+                                    home_corners_live = EXCLUDED.home_corners_live,
+                                    away_corners_live = EXCLUDED.away_corners_live,
+                                    momentum_index = EXCLUDED.momentum_index,
+                                    last_event = EXCLUDED.last_event, last_updated = NOW();
+                            """, db_match_id, minute, status, g_h, g_a, s_h_on, s_a_on, c_h, c_a, round(momentum_index, 2), last_event)
+            
+            await redis_client.set("quant:live_tracking_ids", json.dumps(live_ids))
+        except Exception as e:
+            logger.error(f"Erro no Live Daemon (Redis): {e}")
+        finally:
+            if redis_client:
+                await redis_client.aclose() # Fecha a conexão graciosamente
 
     # =====================================================================
     # TASK 4: WEEKLY PLAYERS & INJURIES (Terças e Sextas)
@@ -355,13 +381,10 @@ class APIFootballMaster:
         logger.info(f"🧬 [WEEKLY ROSTER] Atualizando Banco de Jogadores e Lesões...")
         
         season = str(agora.year if agora.month > 6 else agora.year - 1)
-        
-        # Vamos rotacionar: Terças puxa Tier 1, Sextas puxa Tier 2
         target_leagues = self.TIER_1_LEAGUES if agora.weekday() == 1 else self.TIER_2_LEAGUES
         
         async with db.pool.acquire() as conn:
             for api_league_id, sport_key in target_leagues.items():
-                # 1. Busca Lesões
                 logger.info(f"🏥 Buscando lesões para {sport_key}...")
                 injuries = await self._make_request(client, "/injuries", {"league": api_league_id, "season": season})
                 for inj in injuries:
@@ -384,7 +407,6 @@ class APIFootballMaster:
                         VALUES ($1, $2, $3, $4, $5, $6, $7, 'Active')
                     """, player_id_api, t_id, fixture_id, player_name, t_type, reason, expected_return)
 
-                # 2. Busca Player Stats Consolidado
                 logger.info(f"🏃 Buscando Stats Consolidadas de Jogadores para {sport_key}...")
                 page = 1
                 while True:
@@ -437,7 +459,23 @@ class APIFootballMaster:
                     if len(players_data) < 20:
                         break
                     page += 1
-                    await asyncio.sleep(1.5) # Anti-Rate Limit de Segurança
+                    await asyncio.sleep(1.5)
+
+    # =====================================================================
+    # MÓDULO DE BOOTSTRAP (GATILHO DE IGNIÇÃO)
+    # =====================================================================
+    async def _run_bootstrap_if_needed(self, client):
+        logger.info("🔍 Verificando integridade da base de dados (Bootstrap Check)...")
+        async with db.pool.acquire() as conn:
+            amanha = (datetime.now(self.brt_tz) + timedelta(days=1)).date()
+            jogos_futuros = await conn.fetchval("SELECT COUNT(*) FROM core.matches_history WHERE match_date = $1", amanha)
+            
+            if not jogos_futuros or jogos_futuros < 2:
+                logger.warning("⚠️ Agenda vazia. Ativando Injeção de Segurança (Bootstrap).")
+                await self.task_daily_sync(client)
+                logger.info("✅ Bootstrap de Fixtures concluído.")
+            else:
+                logger.info("✅ Banco populado. Bootstrap não necessário.")
 
     # =====================================================================
     # ORQUESTRADOR CENTRAL (Scheduler)
@@ -446,38 +484,36 @@ class APIFootballMaster:
         logger.info("🚀 API-FOOTBALL MASTER DAEMON INICIADO.")
         await db.connect()
         await entity_resolver.load_mappings_from_db()
-        redis_client = await redis.from_url(REDIS_URL)
         
         async with db.pool.acquire() as conn:
             await self.initialize_schema(conn)
 
         limits = httpx.Limits(max_keepalive_connections=20, max_connections=50)
         async with httpx.AsyncClient(limits=limits) as client:
+            
+            await self._run_bootstrap_if_needed(client)
+            
             last_daily_sync = None
             last_weekly_sync = None
             
             while True:
                 agora = datetime.now(self.brt_tz)
                 
-                # 1. DAILY SYNC (Roda às 02:XX AM)
-                if agora.hour == 2 and (not last_daily_sync or last_daily_sync.date() < agora.date()):
+                if agora.hour in [2, 14] and (not last_daily_sync or last_daily_sync.hour != agora.hour or last_daily_sync.date() < agora.date()):
                     await self.task_daily_sync(client)
                     last_daily_sync = agora
                 
-                # 2. LINEUPS (Roda a cada ciclo de 5 mins)
                 if agora.minute % 5 == 0:
                     await self.task_lineups(client)
                 
-                # 3. LIVE DAEMON (On-Demand. Roda a cada 2 minutos contínuos se houver ids)
+                # Chamada limpa sem injetar o redis_client eterno
                 if agora.minute % 2 == 0:
-                    await self.task_live_daemon(client, redis_client)
+                    await self.task_live_daemon(client)
                     
-                # 4. WEEKLY PLAYERS & INJURIES (Roda Terças e Sextas às 03:00 AM)
                 if agora.weekday() in [1, 4] and agora.hour == 3 and (not last_weekly_sync or last_weekly_sync.date() < agora.date()):
                     await self.task_weekly_players(client)
                     last_weekly_sync = agora
 
-                # Pausa para economizar CPU
                 await asyncio.sleep(60)
 
 if __name__ == "__main__":

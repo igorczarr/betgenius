@@ -8,7 +8,8 @@ import httpx
 import redis.asyncio as redis
 import json
 import logging
-from datetime import datetime, timezone
+import hashlib
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # FIX DE ENCODING PARA WINDOWS
@@ -52,7 +53,7 @@ class APILoadBalancer:
         self.current_idx = 0
         self.quotas = {k: 500 for k in keys}
         self.dead_keys = set()
-        logger.info(f"🛡️ Load Balancer Ativado: {self.total_keys} chaves. Potencial: {self.get_global_quota()} reqs.")
+        logger.info(f"🛡️ Load Balancer (The Odds API) Ativado: {self.total_keys} chaves.")
 
     def get_active_key(self) -> str:
         if len(self.dead_keys) == self.total_keys:
@@ -78,20 +79,56 @@ class APILoadBalancer:
     def get_global_quota(self) -> int:
         return sum(q for k, q in self.quotas.items() if k not in self.dead_keys)
 
+# =====================================================================
+# FALLBACK POOL PARA API-FOOTBALL
+# =====================================================================
+class APIFootballBalancer:
+    def __init__(self):
+        keys = [
+            os.getenv("API_FOOTBALL_KEY"),
+            os.getenv("API_FOOTBALL_KEY_2"),
+            os.getenv("API_FOOTBALL_KEY_3"),
+            os.getenv("API_FOOTBALL_KEY_4")
+        ]
+        self.keys = [k for k in keys if k and k.strip()]
+        self.current_idx = 0
+
+    def get_active_headers(self) -> dict:
+        if not self.keys: return None
+        return {
+            "x-rapidapi-host": os.getenv("API_FOOTBALL_HOST", "v3.football.api-sports.io"),
+            "x-rapidapi-key": self.keys[self.current_idx]
+        }
+
+    def rotate_key(self):
+        if self.keys:
+            self.current_idx = (self.current_idx + 1) % len(self.keys)
+            logger.warning("🔄 Rotação de Chave da API-Football acionada.")
+
 key_pool = APILoadBalancer(settings.ODDS_API_KEY_POOL)
+af_pool = APIFootballBalancer()
+
+# Mapeamento Reverso para o Fallback da API-Football
+SPORT_TO_APIF = {
+    "soccer_epl": 39, "soccer_spain_la_liga": 140, "soccer_italy_serie_a": 135,
+    "soccer_germany_bundesliga": 78, "soccer_france_ligue_one": 61,
+    "soccer_uefa_champs_league": 2, "soccer_conmebol_copa_libertadores": 13,
+    "soccer_brazil_campeonato": 71, "soccer_usa_mls": 253,
+    "soccer_efl_champ": 40, "soccer_spain_segunda_division": 141, 
+    "soccer_italy_serie_b": 136, "soccer_portugal_primeira_liga": 94, 
+    "soccer_netherlands_eredivisie": 88, "soccer_brazil_serie_b": 72
+}
 
 # =====================================================================
-# MATRIZ DE ROTAÇÃO S-TIER (Otimização Máxima de Cota)
+# MATRIZ DE ROTAÇÃO S-TIER
 # =====================================================================
 TIERED_LEAGUES = {
-    # TIER 1: Alta Frequência (Rodam sempre a cada ciclo)
     1: [
         "soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a", 
         "soccer_germany_bundesliga", "soccer_france_ligue_one",
         "soccer_uefa_champs_league", "soccer_conmebol_copa_libertadores",
         "soccer_brazil_campeonato", "soccer_usa_mls"
     ],
-    # TIER 2: Frequência Média (Rodam a cada N ciclos para poupar cota - Bulk Fetch é mais barato que Fetch por Time)
     2: [
         "soccer_efl_champ", "soccer_spain_segunda_division", "soccer_italy_serie_b", 
         "soccer_germany_bundesliga2", "soccer_france_ligue_two",
@@ -100,8 +137,6 @@ TIERED_LEAGUES = {
         "soccer_brazil_serie_b", "soccer_uefa_europa_league", 
         "soccer_conmebol_copa_sudamericana", "soccer_argentina_primera_division"
     ],
-    # TIER 3: ON-DEMAND (Exóticas). Ignoradas pelo Loop de Background. 
-    # Disponíveis apenas quando chamadas diretamente via ViewMatchCenter.
     3: [
         "soccer_uefa_europa_conference_league", "soccer_greece_super_league", 
         "soccer_norway_eliteserien", "soccer_sweden_allsvenskan", "soccer_austria_bundesliga", 
@@ -114,14 +149,7 @@ TIERED_LEAGUES = {
 semaphore = asyncio.Semaphore(5) 
 
 async def _make_request(client: httpx.AsyncClient, url: str, params: dict, max_retries=3):
-    """
-    Motor Resiliente S-Tier: Tenta buscar todos os mercados avançados. 
-    Se a liga secundária recusar (422), ele recua para os mercados principais (h2h, totals, spreads)
-    para salvar as odds vitais sem crashar a aplicação.
-    """
     backoff_time = 2.0
-    original_markets = params.get("markets")
-    
     for attempt in range(max_retries):
         current_key = key_pool.get_active_key()
         params["apiKey"] = current_key
@@ -134,13 +162,11 @@ async def _make_request(client: httpx.AsyncClient, url: str, params: dict, max_r
                 return response.json()
                 
             elif response.status_code == 422:
-                # O Pulo do Gato: Fallback tático para evitar a quebra total.
                 if params["markets"] != "h2h,totals,spreads":
                     logger.debug(f"422 Recebido. Fazendo downgrade de mercados para a URL: {url}")
-                    params["markets"] = "h2h,totals,spreads" # Mantém 1X2, Totais e Asian Handicap
+                    params["markets"] = "h2h,totals,spreads" 
                     continue 
                 else:
-                    logger.error(f"❌ 422 Irrecuperável em {url}: {response.text}")
                     return None
                     
             elif response.status_code == 429:
@@ -198,11 +224,24 @@ async def process_match_odds(conn, game: dict, redis_client):
     if not match_id:
         h_id = await auto_register_team(conn, home_team_norm, sport_key)
         a_id = await auto_register_team(conn, away_team_norm, sport_key)
+        
+        # CORREÇÃO CIRÚRGICA: Gerando o match_hash obrigatório
+        hash_str = hashlib.sha256(f"{match_date}_{home_team_norm}_{away_team_norm}".lower().replace(" ", "").encode('utf-8')).hexdigest()
+        
         match_id = await conn.fetchval("""
-            INSERT INTO core.matches_history (sport_key, match_date, home_team_id, away_team_id, status)
-            VALUES ($1, $2, $3, $4, 'SCHEDULED')
+            INSERT INTO core.matches_history (match_hash, sport_key, match_date, home_team_id, away_team_id, status)
+            VALUES ($1, $2, $3, $4, $5, 'SCHEDULED')
+            ON CONFLICT (match_hash) DO NOTHING
             RETURNING id
-        """, sport_key, match_date, h_id, a_id)
+        """, hash_str, sport_key, match_date, h_id, a_id)
+
+        # Caso o DO NOTHING dispare (hash já existia mas não foi apanhado na query anterior), recuperamos o id
+        if not match_id:
+             match_id = await conn.fetchval("SELECT id FROM core.matches_history WHERE match_hash = $1", hash_str)
+
+    # Se ainda assim não houver match_id válido, aborta de forma segura o preenchimento de odds deste jogo
+    if not match_id:
+        return
 
     for bookie in game.get('bookmakers', []):
         bookie_key = bookie['key']
@@ -213,7 +252,6 @@ async def process_match_odds(conn, game: dict, redis_client):
                 price = float(outcome['price'])
                 point = outcome.get('point', '')
 
-                # O Sistema inteligente que acopla o Asian Handicap perfeitamente ao Banco
                 if cat in ['totals', 'spreads'] and point:
                     nome_mercado = f"{name} {point}"
                 else:
@@ -239,7 +277,6 @@ async def process_match_odds(conn, game: dict, redis_client):
                             WHERE id = $3
                         """, price, heavy_drop, record['id'])
                         
-                        # ALARME DE SINDICATO: Se a Pinnacle derrubar a odd em >8%, o Radar avisa
                         if heavy_drop and bookie_key == 'pinnacle':
                             logger.warning(f"🚨 STEAMER DETECTADO: {home_team_norm} x {away_team_norm} | {cat} ({nome_mercado}) caiu para {price} (-{drop_pct:.1%})")
                             await conn.execute("""
@@ -252,33 +289,98 @@ async def process_match_odds(conn, game: dict, redis_client):
                         VALUES ($1, $2, $3, $4, $5, $5, NOW())
                     """, match_id, cat, nome_mercado, bookie_key, price)
 
+async def fetch_fallback_api_football(client, redis_client, sport_key):
+    """Traduz as Odds da API-Football para o formato da The Odds API."""
+    league_id = SPORT_TO_APIF.get(sport_key)
+    if not league_id: return
+    
+    headers = af_pool.get_active_headers()
+    if not headers: return
+    
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    url = "https://v3.football.api-sports.io/odds"
+    
+    try:
+        resp = await client.get(url, headers=headers, params={"league": league_id, "season": "2024", "date": hoje, "bookmaker": 8}, timeout=15.0)
+        if resp.status_code == 200:
+            data = resp.json().get("response", [])
+            async with db.pool.acquire() as conn:
+                for item in data:
+                    h_name = item['fixture']['home']['name']
+                    a_name = item['fixture']['away']['name']
+                    
+                    game = {
+                        "id": f"fallback_{item['fixture']['id']}",
+                        "sport_key": sport_key,
+                        "home_team": h_name,
+                        "away_team": a_name,
+                        "commence_time": item['fixture']['date'],
+                        "bookmakers": []
+                    }
+                    
+                    bookie_data = {"key": "bet365", "markets": []}
+                    
+                    for bookie in item.get('bookmakers', []):
+                        for bet in bookie.get('bets', []):
+                            if bet['id'] == 1: 
+                                outcomes = []
+                                for val in bet['values']:
+                                    name = "Draw" if val['value'] == "Draw" else (h_name if val['value'] == "Home" else a_name)
+                                    outcomes.append({"name": name, "price": float(val['odd'])})
+                                bookie_data['markets'].append({"key": "h2h", "outcomes": outcomes})
+                                
+                            elif bet['id'] == 5: 
+                                outcomes = []
+                                for val in bet['values']:
+                                    if val['value'] == "Over 2.5": outcomes.append({"name": "Over", "price": float(val['odd']), "point": "2.5"})
+                                    elif val['value'] == "Under 2.5": outcomes.append({"name": "Under", "price": float(val['odd']), "point": "2.5"})
+                                if outcomes:
+                                    bookie_data['markets'].append({"key": "totals", "outcomes": outcomes})
+                                    
+                    if bookie_data['markets']:
+                        game['bookmakers'].append(bookie_data)
+                        await process_match_odds(conn, game, redis_client)
+                        
+            if data:
+                logger.info(f"✅ Fallback API-Football concluído com sucesso para {sport_key}.")
+        elif resp.status_code in [403, 429]:
+            af_pool.rotate_key()
+    except Exception as e:
+        logger.error(f"❌ Erro no fallback API-Football para {sport_key}: {e}")
+
 async def fetch_league_markets(client, redis_client, sport_key):
     url = f"{BASE_URL}/{sport_key}/odds"
+    
+    # OTIMIZAÇÃO S-TIER: Limita a busca apenas às próximas 48 horas (Economiza ~80% da cota)
+    now_utc = datetime.now(timezone.utc)
+    from_time = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    to_time = (now_utc + timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    
     params = {
         "regions": "eu,uk,us",
-        # AQUI ESTÁ O ARSENAL COMPLETO: 1x2, Totais, Asian Handicap (spreads), BTTS e HT.
         "markets": "h2h,totals,spreads,btts,h2h_halftime",
         "bookmakers": TARGET_BOOKMAKERS,
-        "oddsFormat": "decimal"
+        "oddsFormat": "decimal",
+        "commenceTimeFrom": from_time,
+        "commenceTimeTo": to_time
     }
 
     async with semaphore:
         games = await _make_request(client, url, params)
-        if not games: return
+        if not games:
+            logger.warning(f"⚠️ The Odds API indisponível para {sport_key}. Acionando Fallback da API-Football...")
+            await fetch_fallback_api_football(client, redis_client, sport_key)
+            return
         
         async with db.pool.acquire() as conn:
             for game in games:
                 await process_match_odds(conn, game, redis_client)
                 
-        logger.info(f"✅ {sport_key}: Matriz de Cotações atualizada (H2H, Totals, Spreads, BTTS, HT).")
+        logger.info(f"✅ {sport_key}: Matriz de Cotações (48h) atualizada.")
 
 def calculate_adaptive_sleep():
-    total_quota = key_pool.get_global_quota()
-    # Proteção de Cota S-Tier
-    if total_quota > 5000: return 600    # 10 Minutos se a cota for gigante
-    elif total_quota > 2000: return 1200 # 20 Minutos
-    elif total_quota > 500: return 3600  # 1 Hora
-    else: return 14400 # 4 Horas de bloqueio de segurança
+    # OTIMIZAÇÃO MÁXIMA: Roda exatamente a cada 12 horas (43200 segundos), operando apenas 2x ao dia.
+    return 43200
 
 async def run_quant_ingestion_loop():
     redis_client = await redis.from_url(REDIS_URL)
@@ -288,7 +390,7 @@ async def run_quant_ingestion_loop():
     await entity_resolver.load_mappings_from_db()
     
     logger.info("🚀 BetGenius Quant Ingestion Ativado.")
-    logger.info(f"Monitorando Elite (T1): {len(TIERED_LEAGUES[1])} | Periféricas (T2): {len(TIERED_LEAGUES[2])} | On-Demand (T3): {len(TIERED_LEAGUES[3])}")
+    logger.info(f"Monitorando Elite (T1): {len(TIERED_LEAGUES[1])} | Periféricas (T2): {len(TIERED_LEAGUES[2])}")
 
     limits = httpx.Limits(max_keepalive_connections=20, max_connections=50)
     
@@ -299,16 +401,14 @@ async def run_quant_ingestion_loop():
             start_time = datetime.now()
             current_quota = key_pool.get_global_quota()
             
-            # Determinamos o que vamos varrer neste ciclo
             target_leagues = TIERED_LEAGUES[1].copy()
             tier_msg = "Apenas Tier 1"
             
-            # A cada 6 ciclos (Aprox 2 horas), varremos também o Tier 2
             if cycle_count % 6 == 0:
                 target_leagues.extend(TIERED_LEAGUES[2])
                 tier_msg = "Tier 1 + Tier 2 (Varredura Ampla)"
                 
-            logger.info(f"--- INICIANDO CICLO {cycle_count} [{tier_msg}] | QUOTA GLOBAL: {current_quota} ---")
+            logger.info(f"--- INICIANDO CICLO {cycle_count} [{tier_msg}] | QUOTA THE ODDS API: {current_quota} ---")
             
             tasks = [fetch_league_markets(client, redis_client, league) for league in target_leagues]
             await asyncio.gather(*tasks)
@@ -317,7 +417,7 @@ async def run_quant_ingestion_loop():
             sleep_time = calculate_adaptive_sleep()
             
             logger.info(f"🏁 Ciclo concluído em {elapsed:.2f}s")
-            logger.info(f"⏳ Cota Restante: {key_pool.get_global_quota()}. Suspendendo por {sleep_time/60:.1f} minutos.\n")
+            logger.info(f"⏳ Cota Restante: {key_pool.get_global_quota()}. Suspendendo por {sleep_time/3600:.1f} horas.\n")
             
             cycle_count += 1
             await asyncio.sleep(sleep_time)
