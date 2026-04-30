@@ -14,7 +14,7 @@ const systemController = require('../controllers/systemController');
 const quantController = require('../controllers/quantController');
 const settlementController = require('../controllers/settlementController');
 const authController = require('../controllers/authController');
-const matchCenterController = require('../controllers/matchCenterController'); // <-- FIX: '../' em vez de './'
+const matchCenterController = require('../controllers/matchCenterController');
 
 // =====================================================================
 // HEALTHCHECK & SISTEMA BASE (TOPBAR E CONFIGS)

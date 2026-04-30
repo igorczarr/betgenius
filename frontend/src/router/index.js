@@ -6,19 +6,9 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/login',
-      name: 'login',
-      component: () => import('../views/LoginView.vue')
-    },
-    {
       path: '/',
       component: () => import('../layouts/MasterLayout.vue'), // O esqueleto da Dashboard
       children: [
-        {
-          path: '', // Rota padrão ao logar
-          name: 'radar',
-          component: () => import('../views/RadarView.vue')
-        }
         // Futuramente colocaremos o Match Center e Banca aqui!
       ]
     }
